@@ -1,3 +1,6 @@
+pub mod point;
+pub mod bbox;
+
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;

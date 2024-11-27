@@ -127,8 +127,8 @@ impl PSTool {
                     } else {
                         llx = llx.min(e.event.line.llx);
                         llx = llx.min(e.event.line.urx);
-                        lly = lly.min(e.event.line.llx);
-                        lly = lly.min(e.event.line.urx);
+                        lly = lly.min(e.event.line.lly);
+                        lly = lly.min(e.event.line.ury);
 
                         urx = urx.max(e.event.line.llx);
                         urx = urx.max(e.event.line.urx);
@@ -140,10 +140,10 @@ impl PSTool {
         }
 
         // Expand the bbox slightly
-        llx = llx - 10.0;
-        lly = lly - 10.0;
-        urx = urx + 10.0;
-        ury = ury + 10.0;
+        llx = llx - 100.0;
+        lly = lly - 100.0;
+        urx = urx + 100.0;
+        ury = ury + 100.0;
 
         (llx, lly, urx, ury)
     }

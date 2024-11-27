@@ -117,7 +117,7 @@ impl PSTool {
                 if e.tag == PSTag::C {
 
                 }
-                if e.tag == PSTag::B {
+                if e.tag == PSTag::B || e.tag == PSTag::L {
                     if !mark {
                         llx = e.event.line.llx.min(e.event.line.urx);
                         lly = e.event.line.lly.min(e.event.line.lly);
@@ -149,7 +149,7 @@ impl PSTool {
     }
 
     pub fn generate(&self, filepath: String) {
-        let mut f = File::create(filepath).unwrap();
+        let mut f = File::create(&filepath).unwrap();
         let (origin_x, origin_y, urx, ury) = self.bbox();
         println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
 
@@ -160,6 +160,7 @@ impl PSTool {
         writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
         writeln!(&mut f, "%%Pages: 1").unwrap();
         writeln!(&mut f, "%%Page: 1 1").unwrap();
+	writeln!(&mut f, "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}", &filepath, &filepath);
         writeln!(&mut f, "/Courier findfont 15 scalefont setfont").unwrap();
         for e in &self.e.e {
             // println!("Got event ");

@@ -12,6 +12,7 @@ fn main() {
     pst.add_box(5.0, 5.0, 20.0, 30.0);
     pst.add_color(0.8, 0.1, 0.2, 1.0);
     pst.add_box(35.0, 19.0, 7.0, 16.0);
+    pst.add_line(33.2, 44.1, 8.7, 5.5);
     pst.generate("testfile.ps".to_string());
 
 

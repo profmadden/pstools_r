@@ -23,7 +23,7 @@ pub struct Color {
     pub fill: bool,
 }
 #[derive(PartialEq)]
-pub enum PSTag {B, C}
+pub enum PSTag {B, C, L}
 
 
 pub union PSUnion {
@@ -78,6 +78,22 @@ impl PSTool {
                 event: PSUnion {
                     line: LBBox {
                         line: false,
+                        llx: llx,
+                        lly: lly,
+                        urx: urx,
+                        ury: ury,
+                    }
+                }
+            }
+        );
+    }
+    pub fn add_line(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
+        self.e.e.push(
+            PSEvent {
+                tag: PSTag::L,
+                event: PSUnion {
+                    line: LBBox {
+                        line: true,
                         llx: llx,
                         lly: lly,
                         urx: urx,
@@ -159,6 +175,11 @@ impl PSTool {
                     writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.lly).unwrap();    
                     writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.lly).unwrap();
                     writeln!(&mut f, "closepath fill").unwrap();
+                }
+                if e.tag == PSTag::L {
+                    writeln!(&mut f, "newpath {} {} moveto", e.event.line.llx, e.event.line.lly).unwrap();
+                    writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
+                    writeln!(&mut f, "stroke").unwrap();
                 }
             }
         }

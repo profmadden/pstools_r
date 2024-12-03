@@ -4,6 +4,7 @@ pub mod bbox;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use bbox::BBox;
 
 #[derive(Clone,Copy)]
 pub struct LBBox {
@@ -22,13 +23,42 @@ pub struct Color {
     pub a: f32,
     pub fill: bool,
 }
+
+#[derive(Clone,Copy)]
+pub struct Fill {
+    pub fill: bool,
+}
+
+#[derive(Clone,Copy)]
+pub struct Text {
+    pub text: usize, // Index into the text strings
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Clone,Copy)]
+pub struct Font {
+    pub scale: f32,
+    pub font_name: usize, // Index into the text strings
+}
+
+#[derive(Clone,Copy)]
+pub struct Comment {
+    pub comment: usize, // Index into the text strings
+}
+
+
 #[derive(PartialEq)]
-pub enum PSTag {B, C, L}
+pub enum PSTag {B, C, L, F, T, FN, CM}
 
 
 pub union PSUnion {
     pub line: LBBox,
     pub color: Color,
+    pub fill: Fill,
+    pub text: Text,
+    pub font: Font,
+    pub comment: Comment
 }
 
 pub struct PSEvent {
@@ -41,21 +71,45 @@ pub struct Events {
 }
 
 
-
-
 pub struct PSTool {
+    bbox: BBox,
+    border: f32,
     e: Events,
+    te: Vec<String>,
 }
 
 impl PSTool {
     pub fn new() -> PSTool {
         PSTool {
+            bbox: BBox {
+                valid: false,
+                llx: 0.0,
+                lly: 0.0,
+                urx: 0.0,
+                ury: 0.0,
+            },
+            border: 0.0,
             e: Events {
                 e: Vec::new(),
-            }
+            },
+            te: Vec::new(),
         }
     }
-    pub fn add_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
+    pub fn add_text(&mut self, x: f32, y: f32, t: String) {
+        self.e.e.push(PSEvent{
+            tag: PSTag::T,
+            event: PSUnion {
+                text: Text {
+                text: self.te.len(),
+                x: x,
+                y: y,
+                }
+            }
+        });
+        self.te.push(t);
+
+    }
+    pub fn set_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.e.e.push(
             PSEvent {
                 tag: PSTag::C,
@@ -70,6 +124,32 @@ impl PSTool {
                     }
                     }
                 });
+    }
+    pub fn set_fill(&mut self, state: bool) {
+        self.e.e.push(
+            PSEvent {
+                tag: PSTag::F,
+                event: PSUnion {
+                    fill: Fill {
+                    fill: state,
+                    },
+                }
+            }
+        );
+    }
+    pub fn set_font(&mut self, scale: f32, font: String) {
+        self.e.e.push(
+            PSEvent {
+                tag: PSTag::FN,
+                event: PSUnion {
+                    font: Font {
+                        scale: scale,
+                        font_name: self.te.len(),
+                    }
+                }
+            }
+        );
+        self.te.push(font);
     }
     pub fn add_box(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
         self.e.e.push(
@@ -104,7 +184,22 @@ impl PSTool {
         );
     }
 
+    pub fn set_bounds(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
+        self.bbox.valid = true;
+        self.bbox.llx = llx;
+        self.bbox.lly = lly;
+        self.bbox.urx = urx;
+        self.bbox.ury = ury;
+    }
+
+    pub fn set_border(&mut self, border: f32) {
+        self.border = border;
+    }
+
     pub fn bbox(&self) -> (f32, f32, f32, f32) {
+        if self.bbox.valid {
+            return (self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury);
+        }
         // BBox started?
         let mut mark = false;
         let mut llx = 0.0;
@@ -139,11 +234,11 @@ impl PSTool {
             }
         }
 
-        // Expand the bbox slightly
-        llx = llx - 100.0;
-        lly = lly - 100.0;
-        urx = urx + 100.0;
-        ury = ury + 100.0;
+        // Expand the bbox by the requested border size
+        llx = llx - self.border;
+        lly = lly - self.border;
+        urx = urx + self.border;
+        ury = ury + self.border;
 
         (llx, lly, urx, ury)
     }
@@ -151,17 +246,19 @@ impl PSTool {
     pub fn generate(&self, filepath: String) {
         let mut f = File::create(&filepath).unwrap();
         let (origin_x, origin_y, urx, ury) = self.bbox();
-        println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
+        // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
 
         writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0").unwrap();
         writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
         writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
-        writeln!(&mut f, "%%BoundingBox: {} {} {} {}", origin_x, origin_y, urx - origin_x, ury - origin_y).unwrap();
+        writeln!(&mut f, "%%BoundingBox: {} {} {} {}", origin_x, origin_y, urx, ury).unwrap();
         writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
         writeln!(&mut f, "%%Pages: 1").unwrap();
         writeln!(&mut f, "%%Page: 1 1").unwrap();
-	writeln!(&mut f, "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}", &filepath, &filepath);
+	    writeln!(&mut f, "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}", &filepath, &filepath).unwrap();
         writeln!(&mut f, "/Courier findfont 15 scalefont setfont").unwrap();
+        let mut fontscale = 15.0;
+        let mut fillstate = false;
         for e in &self.e.e {
             // println!("Got event ");
             unsafe {
@@ -175,12 +272,26 @@ impl PSTool {
                     writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
                     writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.lly).unwrap();    
                     writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.lly).unwrap();
-                    writeln!(&mut f, "closepath fill").unwrap();
+                    if fillstate {
+                        writeln!(&mut f, "closepath fill").unwrap();
+                    } else {
+                        writeln!(&mut f, "stroke").unwrap();
+                    }
                 }
                 if e.tag == PSTag::L {
                     writeln!(&mut f, "newpath {} {} moveto", e.event.line.llx, e.event.line.lly).unwrap();
                     writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
                     writeln!(&mut f, "stroke").unwrap();
+                }
+                if e.tag == PSTag::F {
+                    fillstate = e.event.fill.fill;
+                }
+                if e.tag == PSTag::T {
+                    writeln!(&mut f, "{} {} moveto", e.event.text.x, e.event.text.y).unwrap();
+                    writeln!(&mut f, "({}) show", self.te[e.event.text.text]).unwrap();
+                }
+                if e.tag == PSTag::FN {
+                    writeln!(&mut f, "/{} findfont {} scalefont setfont", self.te[e.event.font.font_name], e.event.font.scale).unwrap();
                 }
             }
         }

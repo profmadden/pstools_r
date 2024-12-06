@@ -74,6 +74,7 @@ pub struct Events {
 pub struct PSTool {
     bbox: BBox,
     border: f32,
+    scale: f32,
     e: Events,
     te: Vec<String>,
 }
@@ -88,6 +89,7 @@ impl PSTool {
                 urx: 0.0,
                 ury: 0.0,
             },
+            scale: 1.0,
             border: 0.0,
             e: Events {
                 e: Vec::new(),
@@ -101,8 +103,8 @@ impl PSTool {
             event: PSUnion {
                 text: Text {
                 text: self.te.len(),
-                x: x,
-                y: y,
+                x: x * self.scale,
+                y: y * self.scale,
                 }
             }
         });
@@ -158,10 +160,10 @@ impl PSTool {
                 event: PSUnion {
                     line: LBBox {
                         line: false,
-                        llx: llx,
-                        lly: lly,
-                        urx: urx,
-                        ury: ury,
+                        llx: llx * self.scale,
+                        lly: lly * self.scale,
+                        urx: urx * self.scale,
+                        ury: ury * self.scale,
                     }
                 }
             }
@@ -174,10 +176,10 @@ impl PSTool {
                 event: PSUnion {
                     line: LBBox {
                         line: true,
-                        llx: llx,
-                        lly: lly,
-                        urx: urx,
-                        ury: ury,
+                        llx: llx * self.scale,
+                        lly: lly * self.scale,
+                        urx: urx * self.scale,
+                        ury: ury * self.scale,
                     }
                 }
             }
@@ -194,6 +196,10 @@ impl PSTool {
 
     pub fn set_border(&mut self, border: f32) {
         self.border = border;
+    }
+
+    pub fn set_scale(&mut self, scale: f32) {
+        self.scale = scale;
     }
 
     pub fn bbox(&self) -> (f32, f32, f32, f32) {

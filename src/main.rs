@@ -1,7 +1,3 @@
-use std::env;
-use pstools_r::Color;
-use pstools_r::LBBox;
-use pstools_r::Events;
 use pstools_r::{*};
 
 fn main() {

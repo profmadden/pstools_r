@@ -3,7 +3,6 @@ pub mod bbox;
 
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
 use bbox::BBox;
 
 #[derive(Clone,Copy)]
@@ -263,7 +262,6 @@ impl PSTool {
         writeln!(&mut f, "%%Page: 1 1").unwrap();
 	    writeln!(&mut f, "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}", &filepath, &filepath).unwrap();
         writeln!(&mut f, "/Courier findfont 15 scalefont setfont").unwrap();
-        let mut fontscale = 15.0;
         let mut fillstate = false;
         for e in &self.e.e {
             // println!("Got event ");

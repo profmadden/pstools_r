@@ -37,6 +37,11 @@ fn main() {
     pst.set_fill(false);
     pst.add_circle(22.0, 22.0, 9.0);
 
+    pst.set_color(0.0, 0.0, 0.0, 1.0);
+    for i in 1..5 {
+        pst.add_curve(5.0, 5.0, 20.0, 30.0 + (i*4) as f32, 50.0, 8.0 + (i * 3) as f32);
+    }
+
     pst.generate("testfile.ps".to_string());
 
     // pst.generate("testfile2.ps".to_string());

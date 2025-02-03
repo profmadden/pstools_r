@@ -46,13 +46,24 @@ pub struct Comment {
     pub comment: usize, // Index into the text strings
 }
 
+#[derive(Clone,Copy)]
+pub struct Curve {
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
+    pub x3: f32,
+    pub y3: f32
+}
+
 
 #[derive(PartialEq)]
-pub enum PSTag {B, C, L, R, F, T, FN, CM}
+pub enum PSTag {B, C, L, R, F, T, V, FN, CM}
 
 
 pub union PSUnion {
     pub line: LBBox,
+    pub curve: Curve,
     pub color: Color,
     pub fill: Fill,
     pub text: Text,
@@ -163,6 +174,23 @@ impl PSTool {
                         lly: lly * self.scale,
                         urx: urx * self.scale,
                         ury: ury * self.scale,
+                    }
+                }
+            }
+        );
+    }
+    pub fn add_curve(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
+        self.e.e.push(
+            PSEvent {
+                tag: PSTag::V,
+                event: PSUnion {
+                    curve: Curve {
+                        x1,
+                        y1,
+                        x2,
+                        y2,
+                        x3,
+                        y3,
                     }
                 }
             }
@@ -310,6 +338,14 @@ impl PSTool {
                     else {
                         writeln!(&mut f, "newpath {} {} {} 0 360 arc stroke", e.event.line.llx, e.event.line.lly, e.event.line.urx);
                     }
+                }
+                if e.tag == PSTag::V {
+                    writeln!(&mut f, "newpath {} {} moveto {} {} {} {} {} {} curveto stroke",
+                    e.event.curve.x1, e.event.curve.y1,
+                    e.event.curve.x1, e.event.curve.y1,
+                    e.event.curve.x2, e.event.curve.y2,
+                    e.event.curve.x3, e.event.curve.y3
+                    );
                 }
                 if e.tag == PSTag::F {
                     fillstate = e.event.fill.fill;

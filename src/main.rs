@@ -31,6 +31,12 @@ fn main() {
     pst.add_text(10.0, 50.0, "3Hello World".to_string());
     
     pst.set_border(10.0);
+
+    pst.add_circle(20.0, 20.0, 8.0);
+    pst.set_color(1.0, 0.0, 0.0, 1.0);
+    pst.set_fill(false);
+    pst.add_circle(22.0, 22.0, 9.0);
+
     pst.generate("testfile.ps".to_string());
 
     // pst.generate("testfile2.ps".to_string());

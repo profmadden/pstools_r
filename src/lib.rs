@@ -48,7 +48,7 @@ pub struct Comment {
 
 
 #[derive(PartialEq)]
-pub enum PSTag {B, C, L, F, T, FN, CM}
+pub enum PSTag {B, C, L, R, F, T, FN, CM}
 
 
 pub union PSUnion {
@@ -168,6 +168,22 @@ impl PSTool {
             }
         );
     }
+    pub fn add_circle(&mut self, x: f32, y: f32, radius: f32) {
+        self.e.e.push(
+            PSEvent {
+                tag: PSTag::R,
+                event: PSUnion {
+                    line: LBBox {
+                        line: false,
+                        llx: x * self.scale,
+                        lly: y * self.scale,
+                        urx: radius * self.scale,
+                        ury: 0.0,
+                    }
+                }
+            }
+        );
+    }
     pub fn add_line(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
         self.e.e.push(
             PSEvent {
@@ -217,7 +233,7 @@ impl PSTool {
                 if e.tag == PSTag::C {
 
                 }
-                if e.tag == PSTag::B || e.tag == PSTag::L {
+                if e.tag == PSTag::B || e.tag == PSTag::L || e.tag == PSTag::R {
                     if !mark {
                         llx = e.event.line.llx.min(e.event.line.urx);
                         lly = e.event.line.lly.min(e.event.line.lly);
@@ -286,6 +302,14 @@ impl PSTool {
                     writeln!(&mut f, "newpath {} {} moveto", e.event.line.llx, e.event.line.lly).unwrap();
                     writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
                     writeln!(&mut f, "stroke").unwrap();
+                }
+                if e.tag == PSTag::R {
+                    if fillstate {
+                        writeln!(&mut f, "newpath {} {} {} 0 360 arc fill", e.event.line.llx, e.event.line.lly, e.event.line.urx);
+                    }
+                    else {
+                        writeln!(&mut f, "newpath {} {} {} 0 360 arc stroke", e.event.line.llx, e.event.line.lly, e.event.line.urx);
+                    }
                 }
                 if e.tag == PSTag::F {
                     fillstate = e.event.fill.fill;

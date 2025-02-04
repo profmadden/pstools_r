@@ -48,7 +48,7 @@ fn main() {
 
 fn demo(pst: &mut PSTool) {
     //let mut pst = PSTool::new();
-    
+    pst.add_comment("This text is inserted directly into the PS file".to_string());
     pst.set_fill(true);
     pst.set_color(0.3, 0.4, 0.2, 1.0);
     pst.add_box(5.0, 5.0, 20.0, 30.0);

@@ -59,7 +59,7 @@ pub struct Curve {
 
 
 #[derive(PartialEq)]
-pub enum PSTag {B, C, L, R, F, T, V, FN, CM}
+pub enum PSTag {B, C, L, R, F, T, V, N, FN, CM}
 
 
 pub union PSUnion {
@@ -120,7 +120,19 @@ impl PSTool {
             }
         });
         self.te.push(t);
-
+    }
+    pub fn add_comment(&mut self, t: String) {
+        self.e.e.push(PSEvent{
+            tag: PSTag::N,
+            event: PSUnion {
+                text: Text {
+                    text: self.te.len(),
+                    x: 0.0,
+                    y: 0.0,
+                }
+            }
+        });
+        self.te.push(t);
     }
     pub fn set_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.e.e.push(
@@ -319,6 +331,9 @@ impl PSTool {
         writeln!(&mut f, "%%Pages: 1").unwrap();
         writeln!(&mut f, "%%Page: 1 1").unwrap();
 	    writeln!(&mut f, "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}", &filepath, &filepath).unwrap();
+        writeln!(&mut f, "%% Binghamton PSTool_r PostScript Generator").unwrap();
+        writeln!(&mut f, "%% https://github.com/profmadden/pstools_r for more information.").unwrap();
+        writeln!(&mut f, "%% ").unwrap();
         writeln!(&mut f, "/Courier findfont 15 scalefont setfont").unwrap();
         let mut fillstate = false;
         for e in &self.e.e {
@@ -367,6 +382,9 @@ impl PSTool {
                 if e.tag == PSTag::T {
                     writeln!(&mut f, "{} {} moveto", e.event.text.x, e.event.text.y).unwrap();
                     writeln!(&mut f, "({}) show", self.te[e.event.text.text]).unwrap();
+                }
+                if e.tag == PSTag::N {
+                    writeln!(&mut f, "%% {}", self.te[e.event.text.text]).unwrap();
                 }
                 if e.tag == PSTag::FN {
                     writeln!(&mut f, "/{} findfont {} scalefont setfont", self.te[e.event.font.font_name], e.event.font.scale).unwrap();
@@ -417,6 +435,10 @@ impl PSTool {
                         self.add_text(x, y, str);
                         continue;
                     }
+                    if let Ok(str) = scan_fmt!(&s, "comment {}", String) {
+                        self.add_comment(str);
+                        continue;
+                    }
                 },
                 _ => {return;}
             }
@@ -457,8 +479,6 @@ pub fn psversion() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn it_works() {
 

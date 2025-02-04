@@ -1,4 +1,5 @@
 # A sample input file for the PSTool command line tool
+comment Need_to_upgrade_the_parser_to_handle_spaces
 text 0 0 HELLO_WORLD
 box 10 10 20 20
 box 5 15 44 56

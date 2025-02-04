@@ -7,7 +7,7 @@ use bbox::BBox;
 use scan_fmt::scan_fmt;
 
 #[derive(Clone,Copy)]
-pub struct LBBox {
+struct LBBox {
     pub line: bool,
     pub llx: f32,
     pub lly: f32,
@@ -16,39 +16,38 @@ pub struct LBBox {
 }
 
 #[derive(Clone,Copy)]
-pub struct Color {
+struct Color {
     pub r: f32,
     pub g: f32,
     pub b: f32,
     pub a: f32,
+}
+
+#[derive(Clone,Copy)]
+struct Fill {
     pub fill: bool,
 }
 
 #[derive(Clone,Copy)]
-pub struct Fill {
-    pub fill: bool,
-}
-
-#[derive(Clone,Copy)]
-pub struct Text {
+struct Text {
     pub text: usize, // Index into the text strings
     pub x: f32,
     pub y: f32,
 }
 
 #[derive(Clone,Copy)]
-pub struct Font {
+struct Font {
     pub scale: f32,
     pub font_name: usize, // Index into the text strings
 }
 
 #[derive(Clone,Copy)]
-pub struct Comment {
+struct Comment {
     pub comment: usize, // Index into the text strings
 }
 
 #[derive(Clone,Copy)]
-pub struct Curve {
+struct Curve {
     pub x1: f32,
     pub y1: f32,
     pub x2: f32,
@@ -59,38 +58,40 @@ pub struct Curve {
 
 
 #[derive(PartialEq)]
-pub enum PSTag {B, C, L, R, F, T, V, N, FN, CM}
+enum PSTag {B, C, L, R, F, T, V, N, FN}
 
 
-pub union PSUnion {
-    pub line: LBBox,
-    pub curve: Curve,
-    pub color: Color,
-    pub fill: Fill,
-    pub text: Text,
-    pub font: Font,
-    pub comment: Comment
+union PSUnion {
+    line: LBBox,
+    curve: Curve,
+    color: Color,
+    fill: Fill,
+    text: Text,
+    font: Font,
+    comment: Comment
 }
 
-pub struct PSEvent {
-    pub tag: PSTag,
-    pub event: PSUnion,
+struct PSEvent {
+    tag: PSTag,
+    event: PSUnion,
 }
 
-pub struct Events {
-    pub e: Vec<PSEvent>,
+struct Events {
+    e: Vec<PSEvent>,
 }
 
-
+/// PSTool structure
+/// here is more info about it
 pub struct PSTool {
     bbox: BBox,
     border: f32,
     scale: f32,
-    e: Events,
+    events: Vec<PSEvent>,
     te: Vec<String>,
 }
 
 impl PSTool {
+    /// new function creates a new pstool
     pub fn new() -> PSTool {
         PSTool {
             bbox: BBox {
@@ -102,14 +103,12 @@ impl PSTool {
             },
             scale: 1.0,
             border: 0.0,
-            e: Events {
-                e: Vec::new(),
-            },
+            events: Vec::new(),
             te: Vec::new(),
         }
     }
     pub fn add_text(&mut self, x: f32, y: f32, t: String) {
-        self.e.e.push(PSEvent{
+        self.events.push(PSEvent{
             tag: PSTag::T,
             event: PSUnion {
                 text: Text {
@@ -122,7 +121,7 @@ impl PSTool {
         self.te.push(t);
     }
     pub fn add_comment(&mut self, t: String) {
-        self.e.e.push(PSEvent{
+        self.events.push(PSEvent{
             tag: PSTag::N,
             event: PSUnion {
                 text: Text {
@@ -135,7 +134,7 @@ impl PSTool {
         self.te.push(t);
     }
     pub fn set_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
-        self.e.e.push(
+        self.events.push(
             PSEvent {
                 tag: PSTag::C,
                 event: PSUnion {
@@ -145,13 +144,12 @@ impl PSTool {
                         g: g,
                         b: b,
                         a: a,
-                        fill: true,
                     }
                     }
                 });
     }
     pub fn set_fill(&mut self, state: bool) {
-        self.e.e.push(
+        self.events.push(
             PSEvent {
                 tag: PSTag::F,
                 event: PSUnion {
@@ -163,7 +161,7 @@ impl PSTool {
         );
     }
     pub fn set_font(&mut self, scale: f32, font: String) {
-        self.e.e.push(
+        self.events.push(
             PSEvent {
                 tag: PSTag::FN,
                 event: PSUnion {
@@ -177,7 +175,7 @@ impl PSTool {
         self.te.push(font);
     }
     pub fn add_box(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
-        self.e.e.push(
+        self.events.push(
             PSEvent {
                 tag: PSTag::B,
                 event: PSUnion {
@@ -193,7 +191,7 @@ impl PSTool {
         );
     }
     pub fn add_curve(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
-        self.e.e.push(
+        self.events.push(
             PSEvent {
                 tag: PSTag::V,
                 event: PSUnion {
@@ -210,7 +208,7 @@ impl PSTool {
         );
     }
     pub fn add_circle(&mut self, x: f32, y: f32, radius: f32) {
-        self.e.e.push(
+        self.events.push(
             PSEvent {
                 tag: PSTag::R,
                 event: PSUnion {
@@ -226,7 +224,7 @@ impl PSTool {
         );
     }
     pub fn add_line(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
-        self.e.e.push(
+        self.events.push(
             PSEvent {
                 tag: PSTag::L,
                 event: PSUnion {
@@ -269,7 +267,7 @@ impl PSTool {
         let mut urx = 0.0;
         let mut ury = 0.0;
 
-        for e in &self.e.e {
+        for e in &self.events {
             unsafe {
                 if e.tag == PSTag::C {
 
@@ -306,7 +304,7 @@ impl PSTool {
     }
 
     pub fn len(&self) -> usize {
-        self.e.e.len()
+        self.events.len()
     }
 
     pub fn generate(&self, filepath: String) {
@@ -336,7 +334,7 @@ impl PSTool {
         writeln!(&mut f, "%% ").unwrap();
         writeln!(&mut f, "/Courier findfont 15 scalefont setfont").unwrap();
         let mut fillstate = false;
-        for e in &self.e.e {
+        for e in &self.events {
             // println!("Got event ");
             unsafe {
                 if e.tag == PSTag::C {
@@ -474,7 +472,7 @@ fn getline(reader: &mut BufReader<File>) -> std::io::Result<String> {
 
 
 pub fn psversion() -> String {
-    "PSTools_R version 1.0".to_string()
+    "PSTools_R version 0.1".to_string()
 }
 
 #[cfg(test)]

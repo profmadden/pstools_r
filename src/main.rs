@@ -1,3 +1,6 @@
+/// PSTool
+/// A simple library for generating PostScript graphics.  The raw PostScript
+/// can then be converted to PDF using a tool like GhostScript.
 use pstools_r::{*};
 
 use argh::FromArgs;

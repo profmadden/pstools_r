@@ -4,6 +4,7 @@ pub mod bbox;
 use std::fs::File;
 use std::io::Write;
 use bbox::BBox;
+use scan_fmt::scan_fmt;
 
 #[derive(Clone,Copy)]
 pub struct LBBox {
@@ -185,12 +186,12 @@ impl PSTool {
                 tag: PSTag::V,
                 event: PSUnion {
                     curve: Curve {
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        x3,
-                        y3,
+                        x1: x1 * self.scale,
+                        y1: y1 * self.scale,
+                        x2: x2 * self.scale,
+                        y2: y2 * self.scale,
+                        x3: x3 * self.scale,
+                        y3: y3 * self.scale,
                     }
                 }
             }
@@ -292,8 +293,21 @@ impl PSTool {
         (llx, lly, urx, ury)
     }
 
+    pub fn len(&self) -> usize {
+        self.e.e.len()
+    }
+
     pub fn generate(&self, filepath: String) {
-        let mut f = File::create(&filepath).unwrap();
+        let mut f;
+
+        // if the file path is empty, just print to standard out
+        if filepath.len() == 0 {
+            f = Box::new(std::io::stdout()) as Box<dyn Write>;
+        } else {
+            f = Box::new(File::create(&filepath).unwrap()) as Box<dyn Write>;
+        }
+
+        // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
         let (origin_x, origin_y, urx, ury) = self.bbox();
         // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
 
@@ -333,10 +347,10 @@ impl PSTool {
                 }
                 if e.tag == PSTag::R {
                     if fillstate {
-                        writeln!(&mut f, "newpath {} {} {} 0 360 arc fill", e.event.line.llx, e.event.line.lly, e.event.line.urx);
+                        writeln!(&mut f, "newpath {} {} {} 0 360 arc fill", e.event.line.llx, e.event.line.lly, e.event.line.urx).unwrap();
                     }
                     else {
-                        writeln!(&mut f, "newpath {} {} {} 0 360 arc stroke", e.event.line.llx, e.event.line.lly, e.event.line.urx);
+                        writeln!(&mut f, "newpath {} {} {} 0 360 arc stroke", e.event.line.llx, e.event.line.lly, e.event.line.urx).unwrap();
                     }
                 }
                 if e.tag == PSTag::V {
@@ -345,7 +359,7 @@ impl PSTool {
                     e.event.curve.x1, e.event.curve.y1,
                     e.event.curve.x2, e.event.curve.y2,
                     e.event.curve.x3, e.event.curve.y3
-                    );
+                    ).unwrap();
                 }
                 if e.tag == PSTag::F {
                     fillstate = e.event.fill.fill;
@@ -362,10 +376,80 @@ impl PSTool {
         writeln!(&mut f, "%%EOF\n").unwrap();
 
     }
+
+    pub fn parse(&mut self, filename: &String) {
+        let f = File::open(filename).unwrap();
+        let mut reader = BufReader::with_capacity(32000, f);
+        loop {
+            let line = getline(&mut reader);
+            match line {
+                Ok(s) => {
+                    // println!("Input line {s}");
+                    if let Ok((x1, y1, x2, y2)) = scan_fmt!(&s, "box {} {} {} {}", f32, f32, f32, f32){
+                        self.add_box(x1, y1, x2, y2);
+                        continue;
+                    }
+                    if let Ok((x1, y1, x2, y2)) = scan_fmt!(&s, "line {} {} {} {}", f32, f32, f32, f32){
+                        self.add_line(x1, y1, x2, y2);
+                        continue;
+                    }
+                    if let Ok((x, y, r)) = scan_fmt!(&s, "circle {} {} {}", f32, f32, f32) {
+                        self.add_circle(x, y, r);
+                        continue;
+                    }
+                    if let Ok((r, g, b)) = scan_fmt!(&s, "color {} {} {}", f32, f32, f32) {
+                        self.set_color(r, g, b, 1.0);
+                        continue;
+                    }
+                    if let Ok(fill) = scan_fmt!(&s, "fill {}", usize) {
+                        self.set_fill(fill != 0);
+                        continue;
+                    }
+                    if let Ok((x1, y1, x2, y2, x3, y3)) = scan_fmt!(&s, "curve {} {} {} {} {} {}", f32, f32, f32, f32, f32, f32) {
+                        self.add_curve(x1, y1, x2, y2, x3, y3);
+                        continue;
+                    }
+                    if let Ok((scale, font)) = scan_fmt!(&s, "font {} {}", f32, String){
+                        self.set_font(scale, font);
+                        continue;
+                    }
+                    if let Ok((x, y, str))= scan_fmt!(&s, "text {} {} {}", f32, f32, String) {
+                        self.add_text(x, y, str);
+                        continue;
+                    }
+                },
+                _ => {return;}
+            }
+        }
+    }
 }
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+
+use std::io::{BufRead,BufReader};
+use std::io::{Error,ErrorKind};
+
+fn getline(reader: &mut BufReader<File>) -> std::io::Result<String> {
+    loop {
+        let mut line = String::new();
+        let _len = reader.read_line(&mut line).unwrap();
+        // println!("Read in {} bytes, line {}", _len, line);
+
+        if _len == 0 {
+            return std::result::Result::Err(Error::new(ErrorKind::Other, "end of file"));
+        }
+
+        if line.starts_with("#") {
+            // println!("Skip comment.");
+            continue;
+        }
+
+        if _len == 1 {
+            continue;
+        }
+
+        return Ok(line.trim().to_string());
+    }
 }
+
 
 pub fn psversion() -> String {
     "PSTools_R version 1.0".to_string()
@@ -377,7 +461,6 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+
     }
 }

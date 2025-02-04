@@ -1,9 +1,54 @@
 use pstools_r::{*};
 
+use argh::FromArgs;
+#[derive(FromArgs)]
+/// PSTools_r Simplified PostScript generator
+struct PSArgs {
+    /// input file
+    #[argh(option, short='i')]
+    input: Option<String>,
+    /// output file
+    #[argh(option, short='o')]
+    output: Option<String>,
+    /// demo mode
+    #[argh(switch, short='d')]
+    demo: bool,
+    /// detailed help information
+    #[argh(switch, short='h')]
+    detail: bool,
+}
 fn main() {
-    println!("PSTools main!");
-    let mut pst = PSTool::new();
+    println!("PSTools_r Simplified PostScript generation in Rust");
+    let arguments: PSArgs = argh::from_env();
 
+    if arguments.detail {
+        detailed_help();
+        return;
+    }
+    
+    let mut pst = PSTool::new();
+    if arguments.input.is_some() {
+        println!("Read an input file");
+        pst.parse(&arguments.input.unwrap());
+    }
+    if arguments.demo {
+        demo(&mut pst);
+    }
+    if pst.len() > 0 {
+        if arguments.output.is_some() {
+            pst.generate(arguments.output.unwrap());
+        } else {
+            pst.generate("".to_string());
+        }
+        return;
+    } else {
+        println!("Use -h for information.");
+    }
+}
+
+fn demo(pst: &mut PSTool) {
+    //let mut pst = PSTool::new();
+    
     pst.set_fill(true);
     pst.set_color(0.3, 0.4, 0.2, 1.0);
     pst.add_box(5.0, 5.0, 20.0, 30.0);
@@ -42,10 +87,10 @@ fn main() {
         pst.add_curve(5.0, 5.0, 20.0, 30.0 + (i*4) as f32, 50.0, 8.0 + (i * 3) as f32);
     }
 
-    pst.generate("testfile.ps".to_string());
+    // pst.generate("pstools_demo.ps".to_string());
 
-    // pst.generate("testfile2.ps".to_string());
-    // pst.set_bounds(8.0, 3.0, 80.0, 40.0);
-    // pst.generate("testfile3.ps".to_string());
+}
 
+fn detailed_help() {
+    println!("More info and details");
 }

@@ -1,5 +1,5 @@
 [package]
-name = "pstools_r"
+name = "pstools"
 version = "0.1.0"
 edition = "2021"
 

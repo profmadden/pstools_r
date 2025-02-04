@@ -1,21 +1,24 @@
-pub mod point;
 pub mod bbox;
+pub mod point;
 
-use std::fs::File;
-use std::io::Write;
 use bbox::BBox;
 use scan_fmt::scan_fmt;
+use std::fs::File;
+use std::io::Write;
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 struct LBBox {
-    pub line: bool,
+    // pub line: bool,
     pub llx: f32,
     pub lly: f32,
     pub urx: f32,
     pub ury: f32,
 }
 
-#[derive(Clone,Copy)]
+// Color in PostScript land is just RGB, but I'm keeping
+// an alpha channel here -- might adapt the code later to
+// generate a PNG file (where alpha could matter).
+#[derive(Clone, Copy)]
 struct Color {
     pub r: f32,
     pub g: f32,
@@ -23,43 +26,53 @@ struct Color {
     pub a: f32,
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 struct Fill {
     pub fill: bool,
 }
 
-#[derive(Clone,Copy)]
+// Using a union to represent different types of events;
+// this doesn't work if there are objects in the structs, so
+// I'm using a separate vector to hold a string, and then
+// the entry in the event vector just has an index into the
+// string vector.  There's probably a better Rust way to do
+// this, but as an old C dog trying to learn a new trick,
+// this is what I came up with.
+#[derive(Clone, Copy)]
 struct Text {
     pub text: usize, // Index into the text strings
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 struct Font {
     pub scale: f32,
     pub font_name: usize, // Index into the text strings
 }
 
-#[derive(Clone,Copy)]
-struct Comment {
-    pub comment: usize, // Index into the text strings
-}
-
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 struct Curve {
     pub x1: f32,
     pub y1: f32,
     pub x2: f32,
     pub y2: f32,
     pub x3: f32,
-    pub y3: f32
+    pub y3: f32,
 }
 
-
 #[derive(PartialEq)]
-enum PSTag {B, C, L, R, F, T, V, N, FN}
-
+enum PSTag {
+    B,
+    C,
+    L,
+    R,
+    F,
+    T,
+    V,
+    N,
+    FN,
+}
 
 union PSUnion {
     line: LBBox,
@@ -68,7 +81,7 @@ union PSUnion {
     fill: Fill,
     text: Text,
     font: Font,
-    comment: Comment
+    // comment: Comment,
 }
 
 struct PSEvent {
@@ -76,12 +89,13 @@ struct PSEvent {
     event: PSUnion,
 }
 
-struct Events {
-    e: Vec<PSEvent>,
-}
-
-/// PSTool structure
-/// here is more info about it
+/// The PSTool structure records a series of PostScript events -- drawing of
+/// lines, boxes, circles, color changes, text, and so on.  A bounding box of the
+/// events is computed when the generate function is called, with the events being
+/// output to the specified file as raw PostScript commands.
+/// <br>
+/// By default, line widths are 1 point.  A scale factor can be set (with each
+/// event scaled by that amount when it is added).
 pub struct PSTool {
     bbox: BBox,
     border: f32,
@@ -107,139 +121,149 @@ impl PSTool {
             te: Vec::new(),
         }
     }
+
+    pub fn add_box(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
+        self.events.push(PSEvent {
+            tag: PSTag::B,
+            event: PSUnion {
+                line: LBBox {
+                    // line: false,
+                    llx: llx * self.scale,
+                    lly: lly * self.scale,
+                    urx: urx * self.scale,
+                    ury: ury * self.scale,
+                },
+            },
+        });
+    }
+    pub fn add_line(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
+        self.events.push(PSEvent {
+            tag: PSTag::L,
+            event: PSUnion {
+                line: LBBox {
+                    // line: true,
+                    llx: llx * self.scale,
+                    lly: lly * self.scale,
+                    urx: urx * self.scale,
+                    ury: ury * self.scale,
+                },
+            },
+        });
+    }
+    pub fn add_circle(&mut self, x: f32, y: f32, radius: f32) {
+        self.events.push(PSEvent {
+            tag: PSTag::R,
+            event: PSUnion {
+                line: LBBox {
+                    // line: false,
+                    llx: x * self.scale,
+                    lly: y * self.scale,
+                    urx: radius * self.scale,
+                    ury: 0.0,
+                },
+            },
+        });
+    }
+
+    pub fn add_curve(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
+        self.events.push(PSEvent {
+            tag: PSTag::V,
+            event: PSUnion {
+                curve: Curve {
+                    x1: x1 * self.scale,
+                    y1: y1 * self.scale,
+                    x2: x2 * self.scale,
+                    y2: y2 * self.scale,
+                    x3: x3 * self.scale,
+                    y3: y3 * self.scale,
+                },
+            },
+        });
+    }
+
+    /// Adds text onto the display at the specified coordintes.
     pub fn add_text(&mut self, x: f32, y: f32, t: String) {
-        self.events.push(PSEvent{
+        self.events.push(PSEvent {
             tag: PSTag::T,
             event: PSUnion {
                 text: Text {
-                text: self.te.len(),
-                x: x * self.scale,
-                y: y * self.scale,
-                }
-            }
+                    text: self.te.len(),
+                    x: x * self.scale,
+                    y: y * self.scale,
+                },
+            },
         });
         self.te.push(t);
     }
     pub fn add_comment(&mut self, t: String) {
-        self.events.push(PSEvent{
+        self.events.push(PSEvent {
             tag: PSTag::N,
             event: PSUnion {
                 text: Text {
                     text: self.te.len(),
                     x: 0.0,
                     y: 0.0,
-                }
-            }
+                },
+            },
         });
         self.te.push(t);
     }
+    pub fn chart(&mut self, data: Vec<f32>, llx: f32, lly: f32, urx: f32, ury: f32) {
+        if data.len() == 0 || llx == urx || lly == ury {
+            return;
+        }
+
+        let mut min = data[0];
+        let mut max = data[0];
+        for v in &data {
+            if min > *v {
+                min = *v;
+            }
+            if max < *v {
+                max = *v;
+            }
+        }
+        self.add_box(llx, lly, urx, ury);
+        let dx = urx - llx;
+        let dy = ury - lly;
+        let range = max - min;
+        let mut prior_x = 0.0;
+        let mut prior_y = 0.0;
+
+        for i in 0..data.len() {
+            let x = llx + dx * ((i as f32) / (data.len() as f32));
+            let y = lly + dy * ((data[i] - min) / range);
+            if i != 0 {
+                self.add_line(prior_x, prior_y, x, y);
+            }
+            prior_x = x;
+            prior_y = y;
+        }
+    }
     pub fn set_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
-        self.events.push(
-            PSEvent {
-                tag: PSTag::C,
-                event: PSUnion {
-                    color:
-                    Color {
-                        r: r,
-                        g: g,
-                        b: b,
-                        a: a,
-                    }
-                    }
-                });
+        self.events.push(PSEvent {
+            tag: PSTag::C,
+            event: PSUnion {
+                color: Color {
+                    r: r,
+                    g: g,
+                    b: b,
+                    a: a,
+                },
+            },
+        });
     }
     pub fn set_fill(&mut self, state: bool) {
-        self.events.push(
-            PSEvent {
-                tag: PSTag::F,
-                event: PSUnion {
-                    fill: Fill {
-                    fill: state,
-                    },
-                }
-            }
-        );
+        self.events.push(PSEvent {
+            tag: PSTag::F,
+            event: PSUnion {
+                fill: Fill { fill: state },
+            },
+        });
     }
-    pub fn set_font(&mut self, scale: f32, font: String) {
-        self.events.push(
-            PSEvent {
-                tag: PSTag::FN,
-                event: PSUnion {
-                    font: Font {
-                        scale: scale,
-                        font_name: self.te.len(),
-                    }
-                }
-            }
-        );
-        self.te.push(font);
+    pub fn set_border(&mut self, border: f32) {
+        self.border = border;
     }
-    pub fn add_box(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
-        self.events.push(
-            PSEvent {
-                tag: PSTag::B,
-                event: PSUnion {
-                    line: LBBox {
-                        line: false,
-                        llx: llx * self.scale,
-                        lly: lly * self.scale,
-                        urx: urx * self.scale,
-                        ury: ury * self.scale,
-                    }
-                }
-            }
-        );
-    }
-    pub fn add_curve(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
-        self.events.push(
-            PSEvent {
-                tag: PSTag::V,
-                event: PSUnion {
-                    curve: Curve {
-                        x1: x1 * self.scale,
-                        y1: y1 * self.scale,
-                        x2: x2 * self.scale,
-                        y2: y2 * self.scale,
-                        x3: x3 * self.scale,
-                        y3: y3 * self.scale,
-                    }
-                }
-            }
-        );
-    }
-    pub fn add_circle(&mut self, x: f32, y: f32, radius: f32) {
-        self.events.push(
-            PSEvent {
-                tag: PSTag::R,
-                event: PSUnion {
-                    line: LBBox {
-                        line: false,
-                        llx: x * self.scale,
-                        lly: y * self.scale,
-                        urx: radius * self.scale,
-                        ury: 0.0,
-                    }
-                }
-            }
-        );
-    }
-    pub fn add_line(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
-        self.events.push(
-            PSEvent {
-                tag: PSTag::L,
-                event: PSUnion {
-                    line: LBBox {
-                        line: true,
-                        llx: llx * self.scale,
-                        lly: lly * self.scale,
-                        urx: urx * self.scale,
-                        ury: ury * self.scale,
-                    }
-                }
-            }
-        );
-    }
-
     pub fn set_bounds(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
         self.bbox.valid = true;
         self.bbox.llx = llx;
@@ -247,15 +271,21 @@ impl PSTool {
         self.bbox.urx = urx;
         self.bbox.ury = ury;
     }
-
-    pub fn set_border(&mut self, border: f32) {
-        self.border = border;
-    }
-
     pub fn set_scale(&mut self, scale: f32) {
         self.scale = scale;
     }
-
+    pub fn set_font(&mut self, scale: f32, font: String) {
+        self.events.push(PSEvent {
+            tag: PSTag::FN,
+            event: PSUnion {
+                font: Font {
+                    scale: scale,
+                    font_name: self.te.len(),
+                },
+            },
+        });
+        self.te.push(font);
+    }
     pub fn bbox(&self) -> (f32, f32, f32, f32) {
         if self.bbox.valid {
             return (self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury);
@@ -269,9 +299,7 @@ impl PSTool {
 
         for e in &self.events {
             unsafe {
-                if e.tag == PSTag::C {
-
-                }
+                if e.tag == PSTag::C {}
                 if e.tag == PSTag::B || e.tag == PSTag::L || e.tag == PSTag::R {
                     if !mark {
                         llx = e.event.line.llx.min(e.event.line.urx);
@@ -324,13 +352,27 @@ impl PSTool {
         writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0").unwrap();
         writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
         writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
-        writeln!(&mut f, "%%BoundingBox: {} {} {} {}", origin_x, origin_y, urx, ury).unwrap();
+        writeln!(
+            &mut f,
+            "%%BoundingBox: {} {} {} {}",
+            origin_x, origin_y, urx, ury
+        )
+        .unwrap();
         writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
         writeln!(&mut f, "%%Pages: 1").unwrap();
         writeln!(&mut f, "%%Page: 1 1").unwrap();
-	    writeln!(&mut f, "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}", &filepath, &filepath).unwrap();
+        writeln!(
+            &mut f,
+            "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}",
+            &filepath, &filepath
+        )
+        .unwrap();
         writeln!(&mut f, "%% Binghamton PSTool_r PostScript Generator").unwrap();
-        writeln!(&mut f, "%% https://github.com/profmadden/pstools_r for more information.").unwrap();
+        writeln!(
+            &mut f,
+            "%% https://github.com/profmadden/pstools_r for more information."
+        )
+        .unwrap();
         writeln!(&mut f, "%% ").unwrap();
         writeln!(&mut f, "/Courier findfont 15 scalefont setfont").unwrap();
         let mut fillstate = false;
@@ -342,10 +384,15 @@ impl PSTool {
                     writeln!(&mut f, "{} {} {} setrgbcolor", c.r, c.g, c.b).unwrap();
                 }
                 if e.tag == PSTag::B {
-                    writeln!(&mut f, "newpath {} {} moveto", e.event.line.llx, e.event.line.lly).unwrap();
+                    writeln!(
+                        &mut f,
+                        "newpath {} {} moveto",
+                        e.event.line.llx, e.event.line.lly
+                    )
+                    .unwrap();
                     writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.ury).unwrap();
                     writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
-                    writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.lly).unwrap();    
+                    writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.lly).unwrap();
                     writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.lly).unwrap();
                     if fillstate {
                         writeln!(&mut f, "closepath fill").unwrap();
@@ -354,25 +401,46 @@ impl PSTool {
                     }
                 }
                 if e.tag == PSTag::L {
-                    writeln!(&mut f, "newpath {} {} moveto", e.event.line.llx, e.event.line.lly).unwrap();
+                    writeln!(
+                        &mut f,
+                        "newpath {} {} moveto",
+                        e.event.line.llx, e.event.line.lly
+                    )
+                    .unwrap();
                     writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
                     writeln!(&mut f, "stroke").unwrap();
                 }
                 if e.tag == PSTag::R {
                     if fillstate {
-                        writeln!(&mut f, "newpath {} {} {} 0 360 arc fill", e.event.line.llx, e.event.line.lly, e.event.line.urx).unwrap();
-                    }
-                    else {
-                        writeln!(&mut f, "newpath {} {} {} 0 360 arc stroke", e.event.line.llx, e.event.line.lly, e.event.line.urx).unwrap();
+                        writeln!(
+                            &mut f,
+                            "newpath {} {} {} 0 360 arc fill",
+                            e.event.line.llx, e.event.line.lly, e.event.line.urx
+                        )
+                        .unwrap();
+                    } else {
+                        writeln!(
+                            &mut f,
+                            "newpath {} {} {} 0 360 arc stroke",
+                            e.event.line.llx, e.event.line.lly, e.event.line.urx
+                        )
+                        .unwrap();
                     }
                 }
                 if e.tag == PSTag::V {
-                    writeln!(&mut f, "newpath {} {} moveto {} {} {} {} {} {} curveto stroke",
-                    e.event.curve.x1, e.event.curve.y1,
-                    e.event.curve.x1, e.event.curve.y1,
-                    e.event.curve.x2, e.event.curve.y2,
-                    e.event.curve.x3, e.event.curve.y3
-                    ).unwrap();
+                    writeln!(
+                        &mut f,
+                        "newpath {} {} moveto {} {} {} {} {} {} curveto stroke",
+                        e.event.curve.x1,
+                        e.event.curve.y1,
+                        e.event.curve.x1,
+                        e.event.curve.y1,
+                        e.event.curve.x2,
+                        e.event.curve.y2,
+                        e.event.curve.x3,
+                        e.event.curve.y3
+                    )
+                    .unwrap();
                 }
                 if e.tag == PSTag::F {
                     fillstate = e.event.fill.fill;
@@ -385,14 +453,20 @@ impl PSTool {
                     writeln!(&mut f, "%% {}", self.te[e.event.text.text]).unwrap();
                 }
                 if e.tag == PSTag::FN {
-                    writeln!(&mut f, "/{} findfont {} scalefont setfont", self.te[e.event.font.font_name], e.event.font.scale).unwrap();
+                    writeln!(
+                        &mut f,
+                        "/{} findfont {} scalefont setfont",
+                        self.te[e.event.font.font_name], e.event.font.scale
+                    )
+                    .unwrap();
                 }
             }
         }
         writeln!(&mut f, "%%EOF\n").unwrap();
-
     }
 
+    /// Simple text file commands can be parsed, and converted into PostScript.  There should be one command
+    /// per line.  Blank lines, and lines starting with a hash mark are ignored.
     pub fn parse(&mut self, filename: &String) {
         let f = File::open(filename).unwrap();
         let mut reader = BufReader::with_capacity(32000, f);
@@ -401,11 +475,15 @@ impl PSTool {
             match line {
                 Ok(s) => {
                     // println!("Input line {s}");
-                    if let Ok((x1, y1, x2, y2)) = scan_fmt!(&s, "box {} {} {} {}", f32, f32, f32, f32){
+                    if let Ok((x1, y1, x2, y2)) =
+                        scan_fmt!(&s, "box {} {} {} {}", f32, f32, f32, f32)
+                    {
                         self.add_box(x1, y1, x2, y2);
                         continue;
                     }
-                    if let Ok((x1, y1, x2, y2)) = scan_fmt!(&s, "line {} {} {} {}", f32, f32, f32, f32){
+                    if let Ok((x1, y1, x2, y2)) =
+                        scan_fmt!(&s, "line {} {} {} {}", f32, f32, f32, f32)
+                    {
                         self.add_line(x1, y1, x2, y2);
                         continue;
                     }
@@ -421,15 +499,17 @@ impl PSTool {
                         self.set_fill(fill != 0);
                         continue;
                     }
-                    if let Ok((x1, y1, x2, y2, x3, y3)) = scan_fmt!(&s, "curve {} {} {} {} {} {}", f32, f32, f32, f32, f32, f32) {
+                    if let Ok((x1, y1, x2, y2, x3, y3)) =
+                        scan_fmt!(&s, "curve {} {} {} {} {} {}", f32, f32, f32, f32, f32, f32)
+                    {
                         self.add_curve(x1, y1, x2, y2, x3, y3);
                         continue;
                     }
-                    if let Ok((scale, font)) = scan_fmt!(&s, "font {} {}", f32, String){
+                    if let Ok((scale, font)) = scan_fmt!(&s, "font {} {}", f32, String) {
                         self.set_font(scale, font);
                         continue;
                     }
-                    if let Ok((x, y, str))= scan_fmt!(&s, "text {} {} {}", f32, f32, String) {
+                    if let Ok((x, y, str)) = scan_fmt!(&s, "text {} {} {}", f32, f32, String) {
                         self.add_text(x, y, str);
                         continue;
                     }
@@ -437,15 +517,77 @@ impl PSTool {
                         self.add_comment(str);
                         continue;
                     }
-                },
-                _ => {return;}
+                }
+                _ => {
+                    return;
+                }
             }
         }
     }
+
+    pub fn demo(&mut self) {
+        self.add_comment("This text is inserted directly into the PS file".to_string());
+        self.set_fill(true);
+        self.set_color(0.3, 0.4, 0.2, 1.0);
+        self.add_box(5.0, 5.0, 20.0, 30.0);
+        self.set_color(0.8, 0.1, 0.2, 1.0);
+        self.add_box(35.0, 19.0, 7.0, 16.0);
+        self.add_line(33.2, 44.1, 8.7, 5.5);
+
+        self.set_color(0.1, 0.1, 0.8, 1.0);
+        self.set_fill(false);
+        self.add_box(50.0, 50.0, 60.0, 60.0);
+
+        self.set_color(0.1, 0.1, 0.8, 1.0);
+        self.set_fill(true);
+        self.add_box(70.0, 70.0, 80.0, 80.0);
+
+        self.set_color(0.0, 0.0, 0.0, 1.0);
+        self.add_text(10.0, 10.0, "1 Hello World".to_string());
+
+        self.set_color(0.0, 0.0, 1.0, 1.0);
+        self.set_font(20.0, "Times-Roman".to_string());
+        self.add_text(10.0, 30.0, "2 Hello World".to_string());
+
+        self.set_font(20.0, "Helvetica".to_string());
+        self.set_color(0.0, 1.0, 0.0, 1.0);
+        self.add_text(10.0, 50.0, "3 Hello World".to_string());
+
+        self.set_border(10.0);
+
+        self.add_circle(100.0, 40.0, 8.0);
+        self.set_color(1.0, 0.0, 0.0, 1.0);
+        self.set_fill(false);
+        self.add_circle(120.0, 80.0, 30.0);
+
+        self.set_color(0.0, 0.0, 0.0, 1.0);
+        for i in 1..10 {
+            self.add_curve(
+                4.0,
+                150.0,
+                90.0,
+                30.0 + (i * 6) as f32,
+                150.0,
+                8.0 + (i * 11) as f32,
+            );
+        }
+
+        let mut data = Vec::new();
+        for i in 0..100 {
+            data.push(((i as f32) / 10.0).sin());
+        }
+        self.set_color(0.3, 0.3, 0.3, 1.0);
+        self.chart(data, 100.0, 100.0, 300.0, 200.0);
+
+        self.set_color(0.1, 0.1, 1.0, 1.0);
+        self.add_text(30.0, 160.0, pstools_version());
+
+        // pst.generate("pstools_demo.ps".to_string());
+    }
 }
 
-use std::io::{BufRead,BufReader};
-use std::io::{Error,ErrorKind};
+use std::io::{BufRead, BufReader};
+use std::io::{Error, ErrorKind};
 
 fn getline(reader: &mut BufReader<File>) -> std::io::Result<String> {
     loop {
@@ -470,15 +612,13 @@ fn getline(reader: &mut BufReader<File>) -> std::io::Result<String> {
     }
 }
 
-
-pub fn psversion() -> String {
-    "PSTools_R version 0.1".to_string()
+/// Returns information string for the installed version.
+pub fn pstools_version() -> String {
+    "PSTools version 0.1".to_string()
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {
-
-    }
+    fn it_works() {}
 }

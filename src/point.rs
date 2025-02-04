@@ -13,10 +13,7 @@ impl fmt::Display for Point {
 }
 
 impl Point {
-    pub fn new() ->  Point {
-        Point {
-            x: 0.0,
-            y: 0.0,
-        }
+    pub fn new() -> Point {
+        Point { x: 0.0, y: 0.0 }
     }
 }

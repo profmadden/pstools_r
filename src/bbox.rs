@@ -1,6 +1,5 @@
-use std::fmt;
 use crate::point;
-
+use std::fmt;
 
 #[derive(Copy, Clone)]
 pub struct BBox {
@@ -11,10 +10,17 @@ pub struct BBox {
     pub ury: f32,
 }
 
-
 impl fmt::Display for BBox {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[({}, {}) - ({}, {})]:{}", self.llx, self.lly, self.urx, self.ury, self.area())
+        write!(
+            f,
+            "[({}, {}) - ({}, {})]:{}",
+            self.llx,
+            self.lly,
+            self.urx,
+            self.ury,
+            self.area()
+        )
     }
 }
 
@@ -43,7 +49,7 @@ impl BBox {
         }
     }
     pub fn area(&self) -> f32 {
-        (self.urx - self.llx)*(self.ury-self.lly)
+        (self.urx - self.llx) * (self.ury - self.lly)
     }
     pub fn dx(&self) -> f32 {
         self.urx - self.llx
@@ -53,8 +59,8 @@ impl BBox {
     }
     pub fn center(&self) -> point::Point {
         point::Point {
-            x: (self.urx + self.llx)/ 2.0,
-            y: (self.ury + self.lly)/ 2.0,
+            x: (self.urx + self.llx) / 2.0,
+            y: (self.ury + self.lly) / 2.0,
         }
     }
     pub fn expand(&mut self, other: &BBox) {
@@ -63,22 +69,21 @@ impl BBox {
         self.urx = self.urx.max(other.urx);
         self.ury = self.ury.max(other.ury);
     }
-     // Functions to split a region, giving two new regions --
-     pub fn split_h(&self, bias: f32) -> (BBox, BBox) {
+    // Functions to split a region, giving two new regions --
+    pub fn split_h(&self, bias: f32) -> (BBox, BBox) {
         let mut bottom = *self;
         let mut top = *self;
         let dy = self.dy();
-        bottom.ury = bottom.lly + bias*dy;
+        bottom.ury = bottom.lly + bias * dy;
         top.lly = bottom.ury;
         (bottom, top)
-     }
-     pub fn split_v(&self, bias: f32) -> (BBox, BBox) {
+    }
+    pub fn split_v(&self, bias: f32) -> (BBox, BBox) {
         let mut left = *self;
         let mut right = *self;
         let dx = self.dx();
-        left.urx = left.llx + bias*dx;
+        left.urx = left.llx + bias * dx;
         right.llx = left.urx;
         (left, right)
-     }
-        
+    }
 }

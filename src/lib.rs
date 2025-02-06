@@ -1,3 +1,7 @@
+// PSTools PostScript drawing library
+// Patrick H. Madden/pmadden@binghamton.edu
+// PostScript is cool, yo!  And sometimes you need to draw some
+// simple figures, and don't want to hassle with a complex API.
 pub mod bbox;
 pub mod point;
 
@@ -23,7 +27,7 @@ struct Color {
     pub r: f32,
     pub g: f32,
     pub b: f32,
-    pub a: f32,
+    pub _a: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -61,6 +65,13 @@ struct Curve {
     pub y3: f32,
 }
 
+// Events are stored in a vector, with a union structure.  To
+// decode the union, we use a tag - B for Box, C for color,
+// L for line, R for cirRcle, F for fill, T for text,
+// V for curVe, N for note(comment), FN for font name.
+// The unions do not have a String field -- for the events
+// where a String is required, we use an index into a vector
+// of strings.
 #[derive(PartialEq)]
 enum PSTag {
     B,
@@ -102,10 +113,13 @@ pub struct PSTool {
     scale: f32,
     events: Vec<PSEvent>,
     te: Vec<String>,
+    text_x: f32,
+    text_y: f32,
+    text_line_space: f32,
 }
 
 impl PSTool {
-    /// new function creates a new pstool
+    /// Create a new PSTool instance
     pub fn new() -> PSTool {
         PSTool {
             bbox: BBox {
@@ -119,9 +133,14 @@ impl PSTool {
             border: 0.0,
             events: Vec::new(),
             te: Vec::new(),
+            text_x: 0.0,
+            text_y: 0.0,
+            text_line_space: 12.0,
         }
     }
 
+    /// Add an axis-aligned box to the generated output.  The box will
+    /// use the current fill status, and selected color.
     pub fn add_box(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
         self.events.push(PSEvent {
             tag: PSTag::B,
@@ -136,6 +155,9 @@ impl PSTool {
             },
         });
     }
+
+    /// Add a line between the indicated coordinates, using the current
+    /// selected color.
     pub fn add_line(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
         self.events.push(PSEvent {
             tag: PSTag::L,
@@ -150,6 +172,8 @@ impl PSTool {
             },
         });
     }
+    /// Add a circle at the indicated coordinates and radius, using the
+    /// current fill status and color.
     pub fn add_circle(&mut self, x: f32, y: f32, radius: f32) {
         self.events.push(PSEvent {
             tag: PSTag::R,
@@ -164,7 +188,9 @@ impl PSTool {
             },
         });
     }
-
+    /// Add a curve, using a start, mid, and end point.  PostScript supports
+    /// Bezier curves; a curve can be helpful in showing a connection where
+    /// co-linear connections might often overlap.
     pub fn add_curve(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
         self.events.push(PSEvent {
             tag: PSTag::V,
@@ -181,7 +207,10 @@ impl PSTool {
         });
     }
 
-    /// Adds text onto the display at the specified coordintes.
+    /// Adds text onto the display at the specified coordintes. The currently
+    /// selected color, font, and font size will be utilized.  Note that
+    /// currently the String is not character-escaped; close parentheses
+    /// may not render correctly (or cause invalid PostScript generation).
     pub fn add_text(&mut self, x: f32, y: f32, t: String) {
         self.events.push(PSEvent {
             tag: PSTag::T,
@@ -195,6 +224,26 @@ impl PSTool {
         });
         self.te.push(t);
     }
+
+    /// Sets the location for text lines (and auto-increments the
+    /// line position with each add_text_nl call).
+    pub fn set_text_ln(&mut self, x: f32, y: f32) {
+        self.text_x = x;
+        self.text_y = y;
+    }
+
+    /// Adds a string at the current text line location, then increments
+    /// to the next position
+    pub fn add_text_ln(&mut self, t: String) {
+        self.add_text(self.text_x, self.text_y, t);
+        self.text_y = self.text_y - self.text_line_space;
+    }
+
+    /// Adds commented text to the PostScript output; while this
+    /// will not cause visual changes to the generated PostScript, it
+    /// can be helpful for annotating a PostScript file with information
+    /// such as configuration parameters or command line arguments for
+    /// a software tool.
     pub fn add_comment(&mut self, t: String) {
         self.events.push(PSEvent {
             tag: PSTag::N,
@@ -208,31 +257,62 @@ impl PSTool {
         });
         self.te.push(t);
     }
-    pub fn chart(&mut self, data: Vec<f32>, llx: f32, lly: f32, urx: f32, ury: f32) {
+    /// Generates a very simple two-dimensional chart, using floating
+    /// point numbers from the data vector.  The size of the chart is
+    /// specified by the bounding coordinates.  The data in the input
+    /// vector is scaled so that the range of values fills the vertical
+    /// span of the chart.  The chart is written with the currently
+    /// specified color.  If the input max and min are equal, the range
+    /// is determined by the data.  Otherwise, the supplied max and min will
+    /// be used (with these limits clamping the data).
+    pub fn chart(
+        &mut self,
+        data: Vec<f32>,
+        min: f32,
+        max: f32,
+        llx: f32,
+        lly: f32,
+        urx: f32,
+        ury: f32,
+    ) {
         if data.len() == 0 || llx == urx || lly == ury {
             return;
         }
 
-        let mut min = data[0];
-        let mut max = data[0];
-        for v in &data {
-            if min > *v {
-                min = *v;
-            }
-            if max < *v {
-                max = *v;
+        let mut chart_min;
+        let mut chart_max;
+        if min != max {
+            chart_min = min;
+            chart_max = max;
+        } else {
+            chart_min = data[0];
+            chart_max = data[0];
+            for v in &data {
+                if chart_min > *v {
+                    chart_min = *v;
+                }
+                if chart_max < *v {
+                    chart_max = *v;
+                }
             }
         }
         self.add_box(llx, lly, urx, ury);
         let dx = urx - llx;
         let dy = ury - lly;
-        let range = max - min;
+        let range = chart_max - chart_min;
         let mut prior_x = 0.0;
         let mut prior_y = 0.0;
 
         for i in 0..data.len() {
             let x = llx + dx * ((i as f32) / (data.len() as f32));
-            let y = lly + dy * ((data[i] - min) / range);
+            let mut y = lly + dy * ((data[i] - chart_min) / range);
+            // Clamp the range
+            if y > lly + dy {
+                y = lly + dy;
+            }
+            if y < lly {
+                y = lly;
+            }
             if i != 0 {
                 self.add_line(prior_x, prior_y, x, y);
             }
@@ -240,19 +320,29 @@ impl PSTool {
             prior_y = y;
         }
     }
+
+    /// Sets the color for object rendering, using Red/Green/Blue
+    /// hues, where each of these values is in the range of 0.0-1.0.
+    /// The library currently also supports n alpha color channel,
+    /// which is not supported by PostScript.  Future versions of this
+    /// library may add support for PNG file generation (where alpha
+    /// would be relevant).
     pub fn set_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.events.push(PSEvent {
             tag: PSTag::C,
             event: PSUnion {
                 color: Color {
-                    r: r,
-                    g: g,
-                    b: b,
-                    a: a,
+                    r,
+                    g,
+                    b,
+                    _a: a,
                 },
             },
         });
     }
+
+    /// Sets the state of rectangle and circle filling; true causes
+    /// a filled object, false only draws the outline.
     pub fn set_fill(&mut self, state: bool) {
         self.events.push(PSEvent {
             tag: PSTag::F,
@@ -261,9 +351,17 @@ impl PSTool {
             },
         });
     }
+
+    /// The generated PostScript has a bounding box (determined by the
+    /// coordinates of boxes and lines).  When converting to PDF, the
+    /// resulting file wraps the bounding box tightly.  To add additional
+    /// space around a figure, a border can be added (effectively expanding
+    /// the size of the bounding box used in PDF generation).
     pub fn set_border(&mut self, border: f32) {
         self.border = border;
     }
+    /// The bounds for a figure can be set explicitly -- the fixed bounding
+    /// box can be used to trim a figure to only an area of interest.
     pub fn set_bounds(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
         self.bbox.valid = true;
         self.bbox.llx = llx;
@@ -271,9 +369,19 @@ impl PSTool {
         self.bbox.urx = urx;
         self.bbox.ury = ury;
     }
+
+    /// Lines generated are one point wide by default; the scale of all
+    /// graphic elements can be adjusted if needed, so that the line widths appear
+    /// reasonable.  Set the scale prior to adding elements; the scaling
+    /// factor is applied to coordinates as these elements are added.
     pub fn set_scale(&mut self, scale: f32) {
         self.scale = scale;
     }
+
+    /// The font size and scale can be set; the scale of a font is normally
+    /// given in points.  The supported fonts may depend on a PostScript
+    /// engine, but Times-Roman, Helvetica, and Courier are generally
+    /// available.
     pub fn set_font(&mut self, scale: f32, font: String) {
         self.events.push(PSEvent {
             tag: PSTag::FN,
@@ -285,7 +393,11 @@ impl PSTool {
             },
         });
         self.te.push(font);
+        self.text_line_space = scale * 1.1;
     }
+
+    /// Returns the bounding box of elements that have been added.
+    /// The bounding box does not track text entries -- only lines, and boxes.
     pub fn bbox(&self) -> (f32, f32, f32, f32) {
         if self.bbox.valid {
             return (self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury);
@@ -330,11 +442,16 @@ impl PSTool {
 
         (llx, lly, urx, ury)
     }
-
+    /// Returns the length of the event vector -- the number of objects
+    /// that have been added.  If no events have been added to a PSTool,
+    /// PostScript output will not be generated.
     pub fn len(&self) -> usize {
         self.events.len()
     }
-
+    /// Generates simple PostScript to express the objects that have
+    /// been added.  The filepath should be the name of a file to store
+    /// the PostScript in.  If this string is zero length, output will
+    /// be sent to standard out.
     pub fn generate(&self, filepath: String) {
         let mut f;
 
@@ -351,13 +468,23 @@ impl PSTool {
 
         writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0").unwrap();
         writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
-        writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
-        writeln!(
-            &mut f,
-            "%%BoundingBox: {} {} {} {}",
-            origin_x, origin_y, urx, ury
-        )
-        .unwrap();
+        if self.bbox.valid {
+            writeln!(&mut f, "%%Origin: {} {}", self.bbox.llx, self.bbox.lly).unwrap();
+            writeln!(
+                &mut f,
+                "%%BoundingBox: {} {} {} {}",
+                self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
+            )
+            .unwrap();
+        } else {
+            writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
+            writeln!(
+                &mut f,
+                "%%BoundingBox: {} {} {} {}",
+                origin_x, origin_y, urx, ury
+            )
+            .unwrap();
+        }
         writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
         writeln!(&mut f, "%%Pages: 1").unwrap();
         writeln!(&mut f, "%%Page: 1 1").unwrap();
@@ -367,7 +494,7 @@ impl PSTool {
             &filepath, &filepath
         )
         .unwrap();
-        writeln!(&mut f, "%% Binghamton PSTool_r PostScript Generator").unwrap();
+        writeln!(&mut f, "%% Binghamton PSTool PostScript Generator").unwrap();
         writeln!(
             &mut f,
             "%% https://github.com/profmadden/pstools_r for more information."
@@ -525,6 +652,9 @@ impl PSTool {
         }
     }
 
+    /// This routine adds a number of events to the PSTool object, as a means
+    /// to demonstrate how each of these elements is used, and how they would
+    /// appear in the generated PostScript/PDF.
     pub fn demo(&mut self) {
         self.add_comment("This text is inserted directly into the PS file".to_string());
         self.set_fill(true);
@@ -560,8 +690,10 @@ impl PSTool {
         self.set_fill(false);
         self.add_circle(120.0, 80.0, 30.0);
 
-        self.set_color(0.0, 0.0, 0.0, 1.0);
+
+        
         for i in 1..10 {
+            self.set_color(0.6, i as f32 * 0.1, i as f32 * 0.1, 1.0);
             self.add_curve(
                 4.0,
                 150.0,
@@ -572,17 +704,25 @@ impl PSTool {
             );
         }
 
+        self.set_color(0.0, 0.0, 0.0, 1.0);
+        self.set_text_ln(20.0, 100.0);
+        self.set_font(5.0, "Helvetica".to_string());
+        self.add_text_ln("Automatic".to_string());
+        self.add_text_ln("Line".to_string());
+        self.add_text_ln("Advancing!".to_string());
+
+        // Charting operates on a single vector of f32s.
         let mut data = Vec::new();
         for i in 0..100 {
             data.push(((i as f32) / 10.0).sin());
         }
         self.set_color(0.3, 0.3, 0.3, 1.0);
-        self.chart(data, 100.0, 100.0, 300.0, 200.0);
+        self.chart(data, -1.2, 1.2, 100.0, 100.0, 300.0, 200.0);
 
         self.set_color(0.1, 0.1, 1.0, 1.0);
+        self.set_font(15.0, "Courier".to_string());
         self.add_text(30.0, 160.0, pstools_version());
-
-        // pst.generate("pstools_demo.ps".to_string());
+        self.set_bounds(-5.0, -10.0, 210.0, 208.0);
     }
 }
 

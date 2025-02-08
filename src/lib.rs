@@ -74,15 +74,16 @@ struct Curve {
 // of strings.
 #[derive(PartialEq)]
 enum PSTag {
-    B,
-    C,
-    L,
-    R,
-    F,
-    T,
-    V,
-    N,
-    FN,
+    B, // Box
+    C, // Color
+    L,  // Line
+    R, // ciRcle
+    F, // Fill
+    T, // Text
+    V, // curVe
+    N, // Note/Comment
+    FN, // Font
+    P, // Raw PostScript
 }
 
 union PSUnion {
@@ -205,6 +206,25 @@ impl PSTool {
                 },
             },
         });
+    }
+
+    /// Adds raw PostScript commands to the instruction stream.
+    /// Can be used to get full access to PostScript functionality
+    /// (gsave/grestore, translation, scaling, and so on).  Note that
+    /// the bounding box of the output will not correctly track the
+    /// graphic elements introduced with raw PostScript.
+    pub fn add_postscript(&mut self, t: String) {
+        self.events.push(PSEvent {
+            tag: PSTag::P,
+            event: PSUnion {
+                text: Text {
+                    text: self.te.len(),
+                    x: 0.0,
+                    y: 0.0,
+                },
+            },
+        });
+        self.te.push(t);
     }
 
     /// Adds text onto the display at the specified coordintes. The currently
@@ -587,6 +607,12 @@ impl PSTool {
                     )
                     .unwrap();
                 }
+                if e.tag == PSTag::P {
+                    writeln!(
+                        &mut f,
+                        "{}",
+                        self.te[e.event.text.text]).unwrap();
+                }
             }
         }
         writeln!(&mut f, "%%EOF\n").unwrap();
@@ -704,12 +730,20 @@ impl PSTool {
             );
         }
 
+        self.add_postscript("gsave 100 100 translate 20 rotate".to_string());
+        self.set_fill(true);
+        self.add_box(-5.0, 15.0, 100.0, -30.0);
         self.set_color(0.0, 0.0, 0.0, 1.0);
-        self.set_text_ln(20.0, 100.0);
-        self.set_font(5.0, "Helvetica".to_string());
+        self.set_fill(false);
+        self.set_font(5.0, "Helvetica-Bold".to_string());
+        self.set_text_ln(0.0, 0.0);
+        self.add_text_ln("Raw PostScript canvas translation and rotation".to_string());
+        self.add_text_ln("add_text_ln will advance to new lines".to_string());
         self.add_text_ln("Automatic".to_string());
         self.add_text_ln("Line".to_string());
-        self.add_text_ln("Advancing!".to_string());
+        self.add_text_ln("Advancing".to_string());
+
+        self.add_postscript("grestore".to_string());
 
         // Charting operates on a single vector of f32s.
         let mut data = Vec::new();

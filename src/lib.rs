@@ -47,6 +47,7 @@ struct Text {
     pub text: usize, // Index into the text strings
     pub x: f32,
     pub y: f32,
+    pub angle: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -221,6 +222,7 @@ impl PSTool {
                     text: self.te.len(),
                     x: 0.0,
                     y: 0.0,
+                    angle: 0.0,
                 },
             },
         });
@@ -239,6 +241,25 @@ impl PSTool {
                     text: self.te.len(),
                     x: x * self.scale,
                     y: y * self.scale,
+                    angle: 0.0,
+                },
+            },
+        });
+        self.te.push(t);
+    }
+    /// Adds text onto the display at the specified coordintes. The currently
+    /// selected color, font, and font size will be utilized.  Note that
+    /// currently the String is not character-escaped; close parentheses
+    /// may not render correctly (or cause invalid PostScript generation).
+    pub fn add_text_rotated(&mut self, x: f32, y: f32, angle: f32, t: String) {
+        self.events.push(PSEvent {
+            tag: PSTag::T,
+            event: PSUnion {
+                text: Text {
+                    text: self.te.len(),
+                    x: x * self.scale,
+                    y: y * self.scale,
+                    angle: angle,
                 },
             },
         });
@@ -272,6 +293,7 @@ impl PSTool {
                     text: self.te.len(),
                     x: 0.0,
                     y: 0.0,
+                    angle: 0.0,
                 },
             },
         });
@@ -593,8 +615,13 @@ impl PSTool {
                     fillstate = e.event.fill.fill;
                 }
                 if e.tag == PSTag::T {
-                    writeln!(&mut f, "{} {} moveto", e.event.text.x, e.event.text.y).unwrap();
-                    writeln!(&mut f, "({}) show", self.te[e.event.text.text]).unwrap();
+                    if e.event.text.angle != 0.0 {
+                        writeln!(&mut f, "gsave {} {} translate {} rotate 0 0 moveto", e.event.text.x, e.event.text.y, e.event.text.angle).unwrap();
+                        writeln!(&mut f, "({}) show grestore", self.te[e.event.text.text]).unwrap();
+                    } else {
+                        writeln!(&mut f, "{} {} moveto", e.event.text.x, e.event.text.y).unwrap();
+                        writeln!(&mut f, "({}) show", self.te[e.event.text.text]).unwrap();
+                    }
                 }
                 if e.tag == PSTag::N {
                     writeln!(&mut f, "%% {}", self.te[e.event.text.text]).unwrap();
@@ -683,6 +710,8 @@ impl PSTool {
     /// appear in the generated PostScript/PDF.
     pub fn demo(&mut self) {
         self.add_comment("This text is inserted directly into the PS file".to_string());
+
+
         self.set_fill(true);
         self.set_color(0.3, 0.4, 0.2, 1.0);
         self.add_box(5.0, 5.0, 20.0, 30.0);
@@ -716,7 +745,7 @@ impl PSTool {
         self.set_fill(false);
         self.add_circle(120.0, 80.0, 30.0);
 
-
+        self.set_color(1.0, 0.0, 0.0, 1.0);
         
         for i in 1..10 {
             self.set_color(0.6, i as f32 * 0.1, i as f32 * 0.1, 1.0);
@@ -756,6 +785,9 @@ impl PSTool {
         self.set_color(0.1, 0.1, 1.0, 1.0);
         self.set_font(15.0, "Courier".to_string());
         self.add_text(30.0, 160.0, pstools_version());
+
+        self.add_text_rotated(15.0, 60.0, 90.0, "Rotated text".to_string());
+
         self.set_bounds(-5.0, -10.0, 210.0, 208.0);
     }
 }

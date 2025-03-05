@@ -276,6 +276,10 @@ impl PSTool {
     /// Adds a string at the current text line location, then increments
     /// to the next position
     pub fn add_text_ln(&mut self, t: String) {
+        // May want to add character escapes, and support multiple line strings
+        // Here's how they do URL encoding. Looks like it examines one letter at
+        // a time, with characters encoded into u8. 
+        // https://docs.rs/urlencoding/2.1.3/src/urlencoding/enc.rs.html#72-74
         self.add_text(self.text_x, self.text_y, t);
         self.text_y = self.text_y - self.text_line_space;
     }
@@ -536,7 +540,7 @@ impl PSTool {
             &filepath, &filepath
         )
         .unwrap();
-        writeln!(&mut f, "%% Binghamton PSTool PostScript Generator").unwrap();
+        writeln!(&mut f, "%% Binghamton PSTools PostScript Generator").unwrap();
         writeln!(
             &mut f,
             "%% https://github.com/profmadden/pstools_r for more information."

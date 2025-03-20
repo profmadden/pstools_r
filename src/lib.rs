@@ -9,6 +9,7 @@ use bbox::BBox;
 use scan_fmt::scan_fmt;
 use std::fs::File;
 use std::io::Write;
+use std::io::Result;
 // use std::fs::Path;
 use std::path::Path;
 
@@ -507,9 +508,13 @@ impl PSTool {
         self.events.len()
     }
 
-    // pub fn gentest2
+    pub fn gentest2<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        let mut f = File::open(path)?;
 
-    pub fn gentest(&self, filepath: Option<&Path>) -> Result<usize, Box<Error>> {
+        Ok(())
+    }
+
+    pub fn gentest(&self, filepath: Option<&Path>) -> std::io::Result<Box<Error>> {
         let mut f;
 
         // if the file path is empty, just print to standard out
@@ -549,7 +554,7 @@ impl PSTool {
             writeln!(&mut f, "%% gs -o {} -sDEVICE=pdfwrite -dEPSCrop {}", fp.display(), fppdf.display())?;
         }
 
-        Ok(0)
+        Ok()
 
     }
     /// Generates simple PostScript to express the objects that have

@@ -9,6 +9,8 @@ use bbox::BBox;
 use scan_fmt::scan_fmt;
 use std::fs::File;
 use std::io::Write;
+// use std::fs::Path;
+use std::path::Path;
 
 #[derive(Clone, Copy)]
 struct LBBox {
@@ -118,6 +120,7 @@ pub struct PSTool {
     text_x: f32,
     text_y: f32,
     text_line_space: f32,
+    notes: Vec<String>,
 }
 
 impl PSTool {
@@ -138,6 +141,7 @@ impl PSTool {
             text_x: 0.0,
             text_y: 0.0,
             text_line_space: 12.0,
+            notes: Vec::new(),
         }
     }
 
@@ -288,7 +292,12 @@ impl PSTool {
     /// will not cause visual changes to the generated PostScript, it
     /// can be helpful for annotating a PostScript file with information
     /// such as configuration parameters or command line arguments for
-    /// a software tool.
+    /// a software tool.  The comment will be embedded in the PostScript
+    /// file in sequence with other events -- if there's something specific
+    /// being drawn, it may be helpful to have the comment adjacent to
+    /// the PostScript commands in the output file.
+    /// PSTool also supports notes, which are added to the start of the
+    /// output file.
     pub fn add_comment(&mut self, t: String) {
         self.events.push(PSEvent {
             tag: PSTag::N,
@@ -302,6 +311,9 @@ impl PSTool {
             },
         });
         self.te.push(t);
+    }
+    pub fn add_note(&mut self, s: String) {
+        self.notes.push(s);
     }
     /// Generates a very simple two-dimensional chart, using floating
     /// point numbers from the data vector.  The size of the chart is
@@ -494,25 +506,24 @@ impl PSTool {
     pub fn len(&self) -> usize {
         self.events.len()
     }
-    /// Generates simple PostScript to express the objects that have
-    /// been added.  The filepath should be the name of a file to store
-    /// the PostScript in.  If this string is zero length, output will
-    /// be sent to standard out.
-    pub fn generate(&self, filepath: String) {
+
+    // pub fn gentest2
+
+    pub fn gentest(&self, filepath: Option<&Path>) -> Result<usize, Box<Error>> {
         let mut f;
 
         // if the file path is empty, just print to standard out
-        if filepath.len() == 0 {
+        if filepath.is_none() {
             f = Box::new(std::io::stdout()) as Box<dyn Write>;
         } else {
-            f = Box::new(File::create(&filepath).unwrap()) as Box<dyn Write>;
+            f = Box::new(File::create(filepath.unwrap()).unwrap()) as Box<dyn Write>;
         }
 
         // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
         let (origin_x, origin_y, urx, ury) = self.bbox();
         // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
 
-        writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0").unwrap();
+        writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0")?;
         writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
         if self.bbox.valid {
             writeln!(&mut f, "%%Origin: {} {}", self.bbox.llx, self.bbox.lly).unwrap();
@@ -520,26 +531,75 @@ impl PSTool {
                 &mut f,
                 "%%BoundingBox: {} {} {} {}",
                 self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
-            )
-            .unwrap();
+            )?;
         } else {
             writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
             writeln!(
                 &mut f,
                 "%%BoundingBox: {} {} {} {}",
                 origin_x, origin_y, urx, ury
-            )
-            .unwrap();
+            )?;
         }
         writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
         writeln!(&mut f, "%%Pages: 1").unwrap();
         writeln!(&mut f, "%%Page: 1 1").unwrap();
-        writeln!(
-            &mut f,
-            "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}",
-            &filepath, &filepath
-        )
-        .unwrap();
+        if filepath.is_some() {
+            let fp = filepath.unwrap();
+            let fppdf = filepath.unwrap().with_extension("pdf");
+            writeln!(&mut f, "%% gs -o {} -sDEVICE=pdfwrite -dEPSCrop {}", fp.display(), fppdf.display())?;
+        }
+
+        Ok(0)
+
+    }
+    /// Generates simple PostScript to express the objects that have
+    /// been added.  The filepath should be the name of a file to store
+    /// the PostScript in.  If this string is zero length, output will
+    /// be sent to standard out.
+    pub fn generate<P: AsRef<Path>>(&self, filepath: Option<P>) -> Result<usize, Box<Error>> {
+        let mut f;
+
+        // if the file path is empty, just print to standard out
+        if filepath.is_none() {
+            f = Box::new(std::io::stdout()) as Box<dyn Write>;
+        } else {
+            f = Box::new(File::create(filepath.unwrap()).unwrap()) as Box<dyn Write>;
+        }
+
+        // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
+        let (origin_x, origin_y, urx, ury) = self.bbox();
+        // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
+
+        writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0")?;
+        writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
+        if self.bbox.valid {
+            writeln!(&mut f, "%%Origin: {} {}", self.bbox.llx, self.bbox.lly).unwrap();
+            writeln!(
+                &mut f,
+                "%%BoundingBox: {} {} {} {}",
+                self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
+            )?;
+        } else {
+            writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
+            writeln!(
+                &mut f,
+                "%%BoundingBox: {} {} {} {}",
+                origin_x, origin_y, urx, ury
+            )?;
+        }
+        writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
+        writeln!(&mut f, "%%Pages: 1").unwrap();
+        writeln!(&mut f, "%%Page: 1 1").unwrap();
+        writeln!(&mut f, "%% gs -o filename.pdf -sDEVICE=pdfwrite -dEPSCrop filename.ps").unwrap();
+        // if filepath.is_some() {
+        //     let fp: AsRef<Path> = &filepath.unwrap();
+        //     writeln!(
+        //         &mut f,
+        //         "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}",
+        //         fp.display(), filepath.unwrap().display()
+        //     )
+        //     .unwrap();
+        // }
         writeln!(&mut f, "%% Binghamton PSTools PostScript Generator").unwrap();
         writeln!(
             &mut f,
@@ -547,6 +607,12 @@ impl PSTool {
         )
         .unwrap();
         writeln!(&mut f, "%% ").unwrap();
+        for s in &self.notes {
+            writeln!(
+                &mut f,
+                "%% {}", s,
+            ).unwrap();
+        }
         writeln!(&mut f, "/Courier findfont 15 scalefont setfont").unwrap();
         let mut fillstate = false;
         for e in &self.events {
@@ -647,6 +713,8 @@ impl PSTool {
             }
         }
         writeln!(&mut f, "%%EOF\n").unwrap();
+
+        Ok(0)
     }
 
     /// Simple text file commands can be parsed, and converted into PostScript.  There should be one command
@@ -713,7 +781,8 @@ impl PSTool {
     /// to demonstrate how each of these elements is used, and how they would
     /// appear in the generated PostScript/PDF.
     pub fn demo(&mut self) {
-        self.add_comment("This text is inserted directly into the PS file".to_string());
+        self.add_note("This is a note -- placed towards the start of the PS file.".to_string());
+
 
 
         self.set_fill(true);
@@ -722,6 +791,8 @@ impl PSTool {
         self.set_color(0.8, 0.1, 0.2, 1.0);
         self.add_box(35.0, 19.0, 7.0, 16.0);
         self.add_line(33.2, 44.1, 8.7, 5.5);
+        self.add_comment("This text is inserted directly into the PS file".to_string());
+        self.add_comment("The location of this comment is after some earlier PS events".to_string());
 
         self.set_color(0.1, 0.1, 0.8, 1.0);
         self.set_fill(false);

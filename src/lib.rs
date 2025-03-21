@@ -32,7 +32,6 @@ use std::fs::File;
 use std::io::Write;
 use std::io::Result;
 // use std::fs::Path;
-use std::path::Path;
 
 #[derive(Clone, Copy)]
 struct LBBox {

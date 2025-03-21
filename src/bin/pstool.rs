@@ -2,7 +2,6 @@
 /// A simple library for generating PostScript graphics.  The raw PostScript
 /// can then be converted to PDF using a tool like GhostScript.
 use pstools::*;
-use std::path::Path;
 use argh::FromArgs;
 #[derive(FromArgs)]
 /// PSTools_r Simplified PostScript generator

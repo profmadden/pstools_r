@@ -1,13 +1,8 @@
 # pstools_r
 Rust version of pstools -- very lightweight PostScript file writing interface
 
-=== 20241113 ===
-
-Started hacking on this.  Moved the files around a bit in GitHub,
-and making the structs.  Will have a vector of events to handle,
-boxes, lines, text, color changes.  Will support layering, or maybe
-do that in the future.  For short term, just generate PostScript.
-Longer term, add in PNG support.
+The crate can be used as a callable library; it can also build a stand-alone tool that
+parses inputs with simple commands.
 
 Text file commands:
 * color r g b

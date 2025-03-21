@@ -11,6 +11,8 @@ parses inputs with simple commands.
 ```rust
 let mut pst = PSTool::new();
 // pst.add_box(5.0, 5.0, 20.0, 30.0);
+// pst.set_color(0.3, 0.4, 0.2, 1.0);
+// pst.add_text(20.0, 10.0, "Hello world".to_string());
 pst.demo(); // Demonstrates the various features
 pst.generate("demo.ps".to_string());
 ```

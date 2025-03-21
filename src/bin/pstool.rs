@@ -19,6 +19,9 @@ struct PSArgs {
     /// detailed help information
     #[argh(switch, short = 'I')]
     info: bool,
+    /// version information
+    #[argh(switch, short = 'v')]
+    version: bool,
 }
 fn main() {
     println!("PSTools Simplified PostScript generation in Rust");
@@ -29,24 +32,33 @@ fn main() {
         return;
     }
 
-    let mut pst = PSTool::new();
-    if arguments.input.is_some() {
-        println!("Read an input file");
-        pst.parse(&arguments.input.unwrap());
+    if arguments.version {
+        println!("{}", pstools::pstools_version());
+        return;
     }
+
+    let mut pst = PSTool::new();
+
+    if arguments.input.is_some() {
+        pst.parse(arguments.input.unwrap()).unwrap();
+    }
+    // println!("PST has {} events", pst.len());
     if arguments.demo {
         pst.demo();
     }
     if pst.len() > 0 {
-        //pst.generate(arguments.output).unwrap();
         if arguments.output.is_some() {
-            let str = arguments.output.unwrap().clone();
-            let p = Path::new(&str);
-            pst.gentest(Some(p)).unwrap();
-        } else {
-            pst.gentest(None).unwrap();
+            pst.generate(arguments.output.unwrap()).unwrap();
         }
-        pst.gentest(Some(Path::new("file.ps"))).unwrap();
+
+        // if arguments.output.is_some() {
+        //     let str = arguments.output.unwrap().clone();
+        //     let p = Path::new(&str);
+        //     // pst.generate(Some(p)).unwrap();
+        // } else {
+        //     // pst.generate(None::Path).unwrap();
+        // }
+        // pst.gentest(Some(Path::new("file.ps"))).unwrap();
         // if arguments.output.is_some() {
         //     pst.generate(arguments.output.unwrap());
         // } else {

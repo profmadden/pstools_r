@@ -1,8 +1,29 @@
-// PSTools PostScript drawing library
-// Patrick H. Madden/pmadden@binghamton.edu
-// PostScript is cool, yo!  And sometimes you need to draw some
-// simple figures, and don't want to hassle with a complex API.
+//! PSTools PostScript drawing library.
+//! This crate provides a simple interface to the creation of  
+//! PostScript files, which can then be converted into PDF and EPS
+//! using a variety of applications (GhostScript is the typical case).  The
+//! majority of functionality is contained in the PSTool struct.
+//! 
+//! The original motivation for building the library was to display
+//! the physical design of integrated circuits, as part of the development
+//! of circuit placement and routing tools. With tons of transistors,
+//! wires, macro blocks, it's impossible to understand what's going on
+//! just by looking at the coordinates of elements -- you have to draw it,
+//! to see what's going on.  Sophisticated graphics packages can be annoying,
+//! and machine dependent -- PostScript, by contrast, is astonishingly
+//! simple, and renders nicely everywhere.
+//! 
+//! The functionality of the crate is limited -- drawing boxes, circles,
+//! lines, and text -- but sufficient for a lot of quick-and-dirty
+//! rendering needs.  The crate also builds a stand-alone tool that
+//! can read a simple input format, and generate PostScript. 
+// Code by Patrick H. Madden/pmadden@binghamton.edu
+
+
+/// Simple bounding box routines
 pub mod bbox;
+
+/// Simple XY point locations
 pub mod point;
 
 use bbox::BBox;
@@ -313,6 +334,10 @@ impl PSTool {
         });
         self.te.push(t);
     }
+
+    /// Adds a note to the PostScript output -- in contast to the 
+    /// comment, a note is placed at the start of an output PostScript
+    /// file.
     pub fn add_note(&mut self, s: String) {
         self.notes.push(s);
     }
@@ -508,84 +533,84 @@ impl PSTool {
         self.events.len()
     }
 
-    pub fn gentest2<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
-        let mut f = File::open(path)?;
+    // Code here to try to figure out a good way to use the same
+    // interface as generic open/read/write...  I need to get smarter
+    // at Rust.
+    // pub fn gentest2<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+    //     let mut f = File::open(path)?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    pub fn gentest(&self, filepath: Option<&Path>) -> std::io::Result<Box<Error>> {
-        let mut f;
+    // pub fn gentest(&self, filepath: Option<&Path>) -> std::io::Result<usize> {
+    //     let mut f;
 
-        // if the file path is empty, just print to standard out
-        if filepath.is_none() {
-            f = Box::new(std::io::stdout()) as Box<dyn Write>;
-        } else {
-            f = Box::new(File::create(filepath.unwrap()).unwrap()) as Box<dyn Write>;
-        }
+    //     // if the file path is empty, just print to standard out
+    //     if filepath.is_none() {
+    //         f = Box::new(std::io::stdout()) as Box<dyn Write>;
+    //     } else {
+    //         f = Box::new(File::create(filepath.unwrap()).unwrap()) as Box<dyn Write>;
+    //     }
 
-        // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
-        let (origin_x, origin_y, urx, ury) = self.bbox();
-        // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
+    //     // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
+    //     let (origin_x, origin_y, urx, ury) = self.bbox();
+    //     // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
 
-        writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0")?;
-        writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
-        if self.bbox.valid {
-            writeln!(&mut f, "%%Origin: {} {}", self.bbox.llx, self.bbox.lly).unwrap();
-            writeln!(
-                &mut f,
-                "%%BoundingBox: {} {} {} {}",
-                self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
-            )?;
-        } else {
-            writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
-            writeln!(
-                &mut f,
-                "%%BoundingBox: {} {} {} {}",
-                origin_x, origin_y, urx, ury
-            )?;
-        }
-        writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
-        writeln!(&mut f, "%%Pages: 1").unwrap();
-        writeln!(&mut f, "%%Page: 1 1").unwrap();
-        if filepath.is_some() {
-            let fp = filepath.unwrap();
-            let fppdf = filepath.unwrap().with_extension("pdf");
-            writeln!(&mut f, "%% gs -o {} -sDEVICE=pdfwrite -dEPSCrop {}", fp.display(), fppdf.display())?;
-        }
+    //     writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0")?;
+    //     writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
+    //     if self.bbox.valid {
+    //         writeln!(&mut f, "%%Origin: {} {}", self.bbox.llx, self.bbox.lly).unwrap();
+    //         writeln!(
+    //             &mut f,
+    //             "%%BoundingBox: {} {} {} {}",
+    //             self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
+    //         )?;
+    //     } else {
+    //         writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
+    //         writeln!(
+    //             &mut f,
+    //             "%%BoundingBox: {} {} {} {}",
+    //             origin_x, origin_y, urx, ury
+    //         )?;
+    //     }
+    //     writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
+    //     writeln!(&mut f, "%%Pages: 1").unwrap();
+    //     writeln!(&mut f, "%%Page: 1 1").unwrap();
+    //     if filepath.is_some() {
+    //         let fp = filepath.unwrap();
+    //         let fppdf = filepath.unwrap().with_extension("pdf");
+    //         writeln!(&mut f, "%% gs -o {} -sDEVICE=pdfwrite -dEPSCrop {}", fp.display(), fppdf.display())?;
+    //     }
 
-        Ok()
+    //     Ok(0)
 
-    }
+    // }
     /// Generates simple PostScript to express the objects that have
     /// been added.  The filepath should be the name of a file to store
     /// the PostScript in.  If this string is zero length, output will
     /// be sent to standard out.
-    pub fn generate<P: AsRef<Path>>(&self, filepath: Option<P>) -> Result<usize, Box<Error>> {
+    // pub fn generate<P: AsRef<Path>>(&self, filepath: Option<P>) -> Result<usize> {
+    pub fn generate(&self, filepath: String) -> Result<usize> {
         let mut f;
 
         // if the file path is empty, just print to standard out
-        if filepath.is_none() {
-            f = Box::new(std::io::stdout()) as Box<dyn Write>;
-        } else {
-            f = Box::new(File::create(filepath.unwrap()).unwrap()) as Box<dyn Write>;
-        }
+        f = Box::new(File::create(filepath).unwrap()) as Box<dyn Write>;
 
         // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
         let (origin_x, origin_y, urx, ury) = self.bbox();
         // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
 
         writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0")?;
-        writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
+        writeln!(&mut f, "%%DocumentData: Clean7Bit")?;
         if self.bbox.valid {
-            writeln!(&mut f, "%%Origin: {} {}", self.bbox.llx, self.bbox.lly).unwrap();
+            writeln!(&mut f, "%%Origin: {} {}", self.bbox.llx, self.bbox.lly)?;
             writeln!(
                 &mut f,
                 "%%BoundingBox: {} {} {} {}",
                 self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
             )?;
         } else {
-            writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
+            writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y)?;
             writeln!(
                 &mut f,
                 "%%BoundingBox: {} {} {} {}",
@@ -595,7 +620,13 @@ impl PSTool {
         writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
         writeln!(&mut f, "%%Pages: 1").unwrap();
         writeln!(&mut f, "%%Page: 1 1").unwrap();
-        writeln!(&mut f, "%% gs -o filename.pdf -sDEVICE=pdfwrite -dEPSCrop filename.ps").unwrap();
+        writeln!(&mut f, "%% gs -o filename.pdf -sDEVICE=pdfwrite -dEPSCrop filename.ps")?;
+
+        // match filepath {
+        //     Some(fp) => {let dr = fp.deref(); println!("Some {}");},
+        //     None => println!("None"),
+        // }
+
         // if filepath.is_some() {
         //     let fp: AsRef<Path> = &filepath.unwrap();
         //     writeln!(
@@ -605,20 +636,20 @@ impl PSTool {
         //     )
         //     .unwrap();
         // }
-        writeln!(&mut f, "%% Binghamton PSTools PostScript Generator").unwrap();
+        writeln!(&mut f, "%% Binghamton PSTools PostScript Generator")?;
         writeln!(
             &mut f,
             "%% https://github.com/profmadden/pstools_r for more information."
-        )
-        .unwrap();
+        )?;
+
         writeln!(&mut f, "%% ").unwrap();
         for s in &self.notes {
             writeln!(
                 &mut f,
                 "%% {}", s,
-            ).unwrap();
+            )?;
         }
-        writeln!(&mut f, "/Courier findfont 15 scalefont setfont").unwrap();
+        writeln!(&mut f, "/Courier findfont 15 scalefont setfont")?;
         let mut fillstate = false;
         for e in &self.events {
             // println!("Got event ");
@@ -713,20 +744,24 @@ impl PSTool {
                     writeln!(
                         &mut f,
                         "{}",
-                        self.te[e.event.text.text]).unwrap();
+                        self.te[e.event.text.text])?;
                 }
             }
         }
         writeln!(&mut f, "%%EOF\n").unwrap();
 
-        Ok(0)
+        Ok(self.events.len())
     }
 
     /// Simple text file commands can be parsed, and converted into PostScript.  There should be one command
-    /// per line.  Blank lines, and lines starting with a hash mark are ignored.
-    pub fn parse(&mut self, filename: &String) {
+    /// per line.  Blank lines, and lines starting with a hash mark are ignored.  I need to figure
+    /// out the proper Rust way to read from either a file or standard input.
+    pub fn parse(&mut self, filename: String) -> Result<usize> {
+        let mut reader;
+
         let f = File::open(filename).unwrap();
-        let mut reader = BufReader::with_capacity(32000, f);
+        reader = BufReader::with_capacity(32000, f);
+
         loop {
             let line = getline(&mut reader);
             match line {
@@ -774,9 +809,12 @@ impl PSTool {
                         self.add_comment(str);
                         continue;
                     }
+                    // If we have hit this line, it's something unrecognized.
+                    println!("Unrecognized line: {s}");
                 }
                 _ => {
-                    return;
+                    // Expect that there will be no additional input, and we stop reading there
+                    return Ok(0);
                 }
             }
         }
@@ -900,11 +938,6 @@ fn getline(reader: &mut BufReader<File>) -> std::io::Result<String> {
 
 /// Returns information string for the installed version.
 pub fn pstools_version() -> String {
-    "PSTools version 0.1".to_string()
+    "PSTools version 0.1.0".to_string()
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {}
-}

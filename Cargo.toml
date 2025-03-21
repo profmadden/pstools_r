@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A simple interface for generating PostScript files"
 repository = "https://github.com/profmadden/pstools_r"
+exclude = ["notes-pstools_r.md"]
 
 [dependencies]
 argh = "0.1.13"

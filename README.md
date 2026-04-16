@@ -1,4 +1,4 @@
-# pstools_r
+# pstools
 Rust version of pstools -- very lightweight PostScript file writing interface
 
 The crate can be used as a callable library; it can also build a stand-alone tool that

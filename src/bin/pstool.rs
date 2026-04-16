@@ -44,6 +44,17 @@ fn main() {
     // println!("PST has {} events", pst.len());
     if arguments.demo {
         pst.demo();
+        // It's possible to push the current scaling and offsets, and then
+        // shift the frame of reference.  Note that this does *not* change
+        // the PostScript frame of reference.  To compute the bounds of a
+        // number of operations, we have to track the actual XY locations of
+        // objects, and these are controlled by the scaling and offset.
+        // Maybe in the future, do this cleaner?
+        // pst.push(1.5, 300.0, 300.0);
+        // pst.demo();
+        // pst.pop();
+        // pst.push(0.3, 200.0, 0.0);
+        // pst.demo();
     }
     if pst.len() > 0 {
         if arguments.output.is_some() {

@@ -108,6 +108,7 @@ enum PSTag {
     N, // Note/Comment
     FN, // Font
     P, // Raw PostScript
+    // W, // line Width
 }
 
 union PSUnion {
@@ -125,6 +126,12 @@ struct PSEvent {
     event: PSUnion,
 }
 
+struct PSStack {
+    scale: f32,
+    offset_x: f32,
+    offset_y: f32,
+}
+
 /// The PSTool structure records a series of PostScript events -- drawing of
 /// lines, boxes, circles, color changes, text, and so on.  A bounding box of the
 /// events is computed when the generate function is called, with the events being
@@ -132,10 +139,16 @@ struct PSEvent {
 /// <br>
 /// By default, line widths are 1 point.  A scale factor can be set (with each
 /// event scaled by that amount when it is added).
+/// Scaling and offsets can be added with push, and restore to earlier versions
+/// with pop.  Note that if there is embedded PostScript in the output, it does
+/// not follow the scaling of the PSTool library.
 pub struct PSTool {
     bbox: BBox,
     border: f32,
     scale: f32,
+    offset_x: f32,
+    offset_y: f32,
+    stack: Vec<PSStack>,
     events: Vec<PSEvent>,
     te: Vec<String>,
     text_x: f32,
@@ -156,6 +169,9 @@ impl PSTool {
                 ury: 0.0,
             },
             scale: 1.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            stack: Vec::new(),
             border: 0.0,
             events: Vec::new(),
             te: Vec::new(),
@@ -174,10 +190,10 @@ impl PSTool {
             event: PSUnion {
                 line: LBBox {
                     // line: false,
-                    llx: llx * self.scale,
-                    lly: lly * self.scale,
-                    urx: urx * self.scale,
-                    ury: ury * self.scale,
+                    llx: llx * self.scale + self.offset_x,
+                    lly: lly * self.scale + self.offset_y,
+                    urx: urx * self.scale + self.offset_x,
+                    ury: ury * self.scale + self.offset_y,
                 },
             },
         });
@@ -191,10 +207,10 @@ impl PSTool {
             event: PSUnion {
                 line: LBBox {
                     // line: true,
-                    llx: llx * self.scale,
-                    lly: lly * self.scale,
-                    urx: urx * self.scale,
-                    ury: ury * self.scale,
+                    llx: llx * self.scale + self.offset_x,
+                    lly: lly * self.scale + self.offset_y,
+                    urx: urx * self.scale + self.offset_x,
+                    ury: ury * self.scale + self.offset_y,
                 },
             },
         });
@@ -207,8 +223,8 @@ impl PSTool {
             event: PSUnion {
                 line: LBBox {
                     // line: false,
-                    llx: x * self.scale,
-                    lly: y * self.scale,
+                    llx: x * self.scale + self.offset_x,
+                    lly: y * self.scale + self.offset_y,
                     urx: radius * self.scale,
                     ury: 0.0,
                 },
@@ -223,12 +239,12 @@ impl PSTool {
             tag: PSTag::V,
             event: PSUnion {
                 curve: Curve {
-                    x1: x1 * self.scale,
-                    y1: y1 * self.scale,
-                    x2: x2 * self.scale,
-                    y2: y2 * self.scale,
-                    x3: x3 * self.scale,
-                    y3: y3 * self.scale,
+                    x1: x1 * self.scale + self.offset_x,
+                    y1: y1 * self.scale + self.offset_y,
+                    x2: x2 * self.scale + self.offset_x,
+                    y2: y2 * self.scale + self.offset_y,
+                    x3: x3 * self.scale + self.offset_x,
+                    y3: y3 * self.scale + self.offset_y,
                 },
             },
         });
@@ -264,8 +280,8 @@ impl PSTool {
             event: PSUnion {
                 text: Text {
                     text: self.te.len(),
-                    x: x * self.scale,
-                    y: y * self.scale,
+                    x: x * self.scale + self.offset_x,
+                    y: y * self.scale + self.offset_y,
                     angle: 0.0,
                 },
             },
@@ -282,8 +298,8 @@ impl PSTool {
             event: PSUnion {
                 text: Text {
                     text: self.te.len(),
-                    x: x * self.scale,
-                    y: y * self.scale,
+                    x: x * self.scale + self.offset_x,
+                    y: y * self.scale + self.offset_y,
                     angle: angle,
                 },
             },
@@ -294,8 +310,8 @@ impl PSTool {
     /// Sets the location for text lines (and auto-increments the
     /// line position with each add_text_nl call).
     pub fn set_text_ln(&mut self, x: f32, y: f32) {
-        self.text_x = x;
-        self.text_y = y;
+        self.text_x = x * self.scale + self.offset_x;
+        self.text_y = y * self.scale + self.offset_y;
     }
 
     /// Adds a string at the current text line location, then increments
@@ -459,6 +475,25 @@ impl PSTool {
     /// factor is applied to coordinates as these elements are added.
     pub fn set_scale(&mut self, scale: f32) {
         self.scale = scale;
+    }
+
+    /// For stack-like scaling and location offsetting, a scale and offset
+    /// values can be pushed (and become active).  To return to the prior
+    /// scaling status, call the pop method.
+    pub fn push(&mut self, scale: f32, offset_x: f32, offset_y: f32) {
+        self.stack.push(PSStack{scale: self.scale, offset_x: self.offset_x, offset_y: self.offset_y});
+        self.offset_x += self.scale * offset_x;
+        self.offset_y += self.scale * offset_y;
+        self.scale = self.scale * scale;
+    }
+
+    /// Restores the scaling and sizing status.
+    pub fn pop(&mut self) {
+        let coords = self.stack.pop().unwrap();
+
+        self.scale = coords.scale;
+        self.offset_x = coords.offset_x;
+        self.offset_y = coords.offset_y;
     }
 
     /// The font size and scale can be set; the scale of a font is normally
@@ -905,7 +940,8 @@ impl PSTool {
 
         self.add_text_rotated(15.0, 60.0, 90.0, "Rotated text".to_string());
 
-        self.set_bounds(-5.0, -10.0, 210.0, 208.0);
+        // self.set_bounds(-5.0, -10.0, 210.0, 208.0);
+
     }
 }
 

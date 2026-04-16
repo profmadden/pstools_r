@@ -496,6 +496,11 @@ impl PSTool {
         self.offset_y = coords.offset_y;
     }
 
+    /// Gets current scaling information
+    pub fn get_scale(&self) -> (f32, f32, f32) {
+        (self.scale, self.offset_x, self.offset_y)
+    }
+
     /// The font size and scale can be set; the scale of a font is normally
     /// given in points.  The supported fonts may depend on a PostScript
     /// engine, but Times-Roman, Helvetica, and Courier are generally

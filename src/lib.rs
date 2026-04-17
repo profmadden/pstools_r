@@ -254,10 +254,11 @@ impl PSTool {
             event: PSUnion {
                 line: LBBox {
                     // line: false,
-                    llx: llx * self.scale + self.offset_x,
-                    lly: lly * self.scale + self.offset_y,
-                    urx: urx * self.scale + self.offset_x,
-                    ury: ury * self.scale + self.offset_y,
+                    // llx: llx * self.scale + self.offset_x,
+                    // lly: lly * self.scale + self.offset_y,
+                    // urx: urx * self.scale + self.offset_x,
+                    // ury: ury * self.scale + self.offset_y,
+                    llx, lly, urx: urx - llx, ury: ury - lly,
                 },
             },
         });
@@ -271,10 +272,11 @@ impl PSTool {
             event: PSUnion {
                 line: LBBox {
                     // line: true,
-                    llx: llx * self.scale + self.offset_x,
-                    lly: lly * self.scale + self.offset_y,
-                    urx: urx * self.scale + self.offset_x,
-                    ury: ury * self.scale + self.offset_y,
+                    // llx: llx * self.scale + self.offset_x,
+                    // lly: lly * self.scale + self.offset_y,
+                    // urx: urx * self.scale + self.offset_x,
+                    // ury: ury * self.scale + self.offset_y,
+                    llx, lly, urx, ury,
                 },
             },
         });
@@ -287,9 +289,12 @@ impl PSTool {
             event: PSUnion {
                 line: LBBox {
                     // line: false,
-                    llx: x * self.scale + self.offset_x,
-                    lly: y * self.scale + self.offset_y,
-                    urx: radius * self.scale,
+                    // llx: x * self.scale + self.offset_x,
+                    // lly: y * self.scale + self.offset_y,
+                    // urx: radius * self.scale,
+                    llx: x,
+                    lly: y,
+                    urx: radius,
                     ury: 0.0,
                 },
             },
@@ -303,12 +308,13 @@ impl PSTool {
             tag: PSTag::V,
             event: PSUnion {
                 curve: Curve {
-                    x1: x1 * self.scale + self.offset_x,
-                    y1: y1 * self.scale + self.offset_y,
-                    x2: x2 * self.scale + self.offset_x,
-                    y2: y2 * self.scale + self.offset_y,
-                    x3: x3 * self.scale + self.offset_x,
-                    y3: y3 * self.scale + self.offset_y,
+                    // x1: x1 * self.scale + self.offset_x,
+                    // y1: y1 * self.scale + self.offset_y,
+                    // x2: x2 * self.scale + self.offset_x,
+                    // y2: y2 * self.scale + self.offset_y,
+                    // x3: x3 * self.scale + self.offset_x,
+                    // y3: y3 * self.scale + self.offset_y,
+                    x1, y1, x2, y2, x3, y3,
                 },
             },
         });
@@ -344,8 +350,9 @@ impl PSTool {
             event: PSUnion {
                 text: Text {
                     text: self.te.len(),
-                    x: x * self.scale + self.offset_x,
-                    y: y * self.scale + self.offset_y,
+                    // x: x * self.scale + self.offset_x,
+                    // y: y * self.scale + self.offset_y,
+                    x, y,
                     angle: 0.0,
                 },
             },
@@ -362,8 +369,9 @@ impl PSTool {
             event: PSUnion {
                 text: Text {
                     text: self.te.len(),
-                    x: x * self.scale + self.offset_x,
-                    y: y * self.scale + self.offset_y,
+                    // x: x * self.scale + self.offset_x,
+                    // y: y * self.scale + self.offset_y,
+                    x, y,
                     angle: angle,
                 },
             },
@@ -374,8 +382,8 @@ impl PSTool {
     /// Sets the location for text lines (and auto-increments the
     /// line position with each add_text_nl call).
     pub fn set_text_ln(&mut self, x: f32, y: f32) {
-        self.text_x = x * self.scale + self.offset_x;
-        self.text_y = y * self.scale + self.offset_y;
+        self.text_x = x; // x * self.scale + self.offset_x;
+        self.text_y = y; // y * self.scale + self.offset_y;
     }
 
     /// Adds a string at the current text line location, then increments
@@ -596,8 +604,6 @@ impl PSTool {
         self.offset_y += self.scale * offset_y;
     }
 
-    pub fn let_linewidth(&mut self, linewidth: f32) {}
-
     /// Gets current scaling information
     pub fn get_scale(&self) -> (f32, f32, f32) {
         (self.scale, self.offset_x, self.offset_y)
@@ -806,11 +812,17 @@ impl PSTool {
         writeln!(&mut f, "ox oy h add lineto")?;
         writeln!(&mut f, "closepath stroke}} def")?;
 
+        // Filled box
         writeln!(&mut f, "/bf {{/h 2 1 roll def /w 2 1 roll def /oy 2 1 roll def /ox 2 1 roll def newpath ox oy moveto")?;
         writeln!(&mut f, "ox w add oy lineto")?;
         writeln!(&mut f, "ox w add oy h add lineto")?;
         writeln!(&mut f, "ox oy h add lineto")?;
         writeln!(&mut f, "closepath fill}} def")?;        
+
+        // Line
+        writeln!(&mut f, "/ln {{/h 2 1 roll def /w 2 1 roll def /oy 2 1 roll def /ox 2 1 roll def newpath ox oy moveto")?;
+        writeln!(&mut f, "w h lineto")?;
+        writeln!(&mut f, "stroke}} def")?;                
 
         writeln!(&mut f, "%% ").unwrap();
         for s in &self.notes {
@@ -852,14 +864,15 @@ impl PSTool {
                     }
                 }
                 if e.tag == PSTag::L {
-                    writeln!(
-                        &mut f,
-                        "newpath {} {} moveto",
-                        e.event.line.llx, e.event.line.lly
-                    )
-                    .unwrap();
-                    writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
-                    writeln!(&mut f, "stroke").unwrap();
+                    // writeln!(
+                    //     &mut f,
+                    //     "newpath {} {} moveto",
+                    //     e.event.line.llx, e.event.line.lly
+                    // )
+                    // .unwrap();
+                    // writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
+                    // writeln!(&mut f, "stroke").unwrap();
+                    writeln!(&mut f, "{} {} {} {} ln", e.event.line.llx, e.event.line.lly, e.event.line.urx, e.event.line.ury)?;
                 }
                 if e.tag == PSTag::W {
                     writeln!(&mut f, "{} setlinewidth", e.event.line_width).unwrap();
@@ -1068,7 +1081,7 @@ impl PSTool {
 
         self.add_gsave();
         for i in 1..10 {
-            self.set_line_width(i as f32);
+            // self.set_line_width(i as f32);
             self.set_color(0.6, i as f32 * 0.1, i as f32 * 0.1, 1.0);
             self.add_curve(
                 4.0,
@@ -1081,6 +1094,7 @@ impl PSTool {
         }
         self.add_grestore();
 
+        self.add_gsave();
         self.add_postscript("gsave 100 100 translate 20 rotate".to_string());
         self.set_fill(true);
         self.add_box(-5.0, 15.0, 100.0, -30.0);
@@ -1093,8 +1107,9 @@ impl PSTool {
         self.add_text_ln("Automatic".to_string());
         self.add_text_ln("Line".to_string());
         self.add_text_ln("Advancing".to_string());
+        self.add_grestore();
 
-        self.add_postscript("grestore".to_string());
+        // self.add_postscript("grestore".to_string());
 
         // Charting operates on a single vector of f32s.
         let mut data = Vec::new();
@@ -1109,6 +1124,8 @@ impl PSTool {
         self.add_text(30.0, 160.0, pstools_version());
 
         self.add_text_rotated(15.0, 60.0, 90.0, "Rotated text".to_string());
+
+        self.set_fill(false);
 
         // self.set_bounds(-5.0, -10.0, 210.0, 208.0);
     }

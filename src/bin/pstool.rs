@@ -57,6 +57,7 @@ fn main() {
         pst.translate(300.0, 300.0);
         pst.set_scale(0.3);
         pst.demo();
+        pst.add_grestore();
         // pst.pop();
         // pst.push(0.3, 200.0, 0.0);
         // pst.demo();

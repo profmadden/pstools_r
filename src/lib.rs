@@ -3,7 +3,7 @@
 //! PostScript files, which can then be converted into PDF and EPS
 //! using a variety of applications (GhostScript is the typical case).  The
 //! majority of functionality is contained in the PSTool struct.
-//! 
+//!
 //! The original motivation for building the library was to display
 //! the physical design of integrated circuits, as part of the development
 //! of circuit placement and routing tools. With tons of transistors,
@@ -12,13 +12,12 @@
 //! to see what's going on.  Sophisticated graphics packages can be annoying,
 //! and machine dependent -- PostScript, by contrast, is astonishingly
 //! simple, and renders nicely everywhere.
-//! 
+//!
 //! The functionality of the crate is limited -- drawing boxes, circles,
 //! lines, and text -- but sufficient for a lot of quick-and-dirty
 //! rendering needs.  The crate also builds a stand-alone tool that
-//! can read a simple input format, and generate PostScript. 
+//! can read a simple input format, and generate PostScript.
 // Code by Patrick H. Madden/pmadden@binghamton.edu
-
 
 /// Simple bounding box routines
 pub mod bbox;
@@ -29,8 +28,8 @@ pub mod point;
 use bbox::BBox;
 use scan_fmt::scan_fmt;
 use std::fs::File;
-use std::io::Write;
 use std::io::Result;
+use std::io::Write;
 // use std::fs::Path;
 
 #[derive(Clone, Copy)]
@@ -80,6 +79,17 @@ struct Font {
 }
 
 #[derive(Clone, Copy)]
+struct Scale {
+    pub scale: f32,
+}
+
+#[derive(Clone, Copy)]
+struct Translate {
+    pub dx: f32,
+    pub dy: f32,
+}
+
+#[derive(Clone, Copy)]
 struct Curve {
     pub x1: f32,
     pub y1: f32,
@@ -98,17 +108,21 @@ struct Curve {
 // of strings.
 #[derive(PartialEq)]
 enum PSTag {
-    B, // Box
-    C, // Color
+    B,  // Box
+    C,  // Color
     L,  // Line
-    R, // ciRcle
-    F, // Fill
-    T, // Text
-    V, // curVe
-    N, // Note/Comment
+    R,  // ciRcle
+    F,  // Fill
+    T,  // Text
+    V,  // curVe
+    N,  // Note/Comment
     FN, // Font
-    P, // Raw PostScript
-    // W, // line Width
+    P,  // Raw PostScript
+    W,  // line Width
+    X,  // Translate
+    S,  // Scale
+    GS, // Gsave
+    GR, // GRestore
 }
 
 union PSUnion {
@@ -118,6 +132,9 @@ union PSUnion {
     fill: Fill,
     text: Text,
     font: Font,
+    line_width: f32,
+    scale: Scale,
+    translate: Translate,
     // comment: Comment,
 }
 
@@ -148,6 +165,9 @@ pub struct PSTool {
     scale: f32,
     offset_x: f32,
     offset_y: f32,
+    font: String,
+    font_scale: f32,
+    line_width: f32,
     stack: Vec<PSStack>,
     events: Vec<PSEvent>,
     te: Vec<String>,
@@ -171,6 +191,9 @@ impl PSTool {
             scale: 1.0,
             offset_x: 0.0,
             offset_y: 0.0,
+            font: "Courier".to_string(),
+            font_scale: 12.0,
+            line_width: 1.0,
             stack: Vec::new(),
             border: 0.0,
             events: Vec::new(),
@@ -180,6 +203,47 @@ impl PSTool {
             text_line_space: 12.0,
             notes: Vec::new(),
         }
+    }
+
+    /// Generates color based on an integer value, while
+    /// attempting to have visual differences between
+    /// consecutive integers.  For some applications (circuit layout!),
+    /// it's useful to color different portions of an illustration
+    /// with contrasting colors.
+    pub fn gen_color(i: i32) -> (f32, f32, f32) {
+        let mut r = (i as f32 * 1.4).cos().abs();
+        let mut g = (i as f32 * 5.0).sin().abs();
+        let mut b = (i as f32 * 1.7).cos().abs();
+
+        let sum = r + g + b;
+        if sum < 1.3 {
+            r = 1.0 - r * r;
+            g = 1.0 - g * g;
+            b = 1.0 - b * b;
+        }
+        if i % 3 == 0 {
+            let temp = g;
+            g = b;
+            b = temp;
+        }
+        let sum = r + g + b;
+        if ((i % 2 == 0) || (i % 3 == 1)) && sum > 1.4 {
+            r = r * 0.8;
+            g = g * 0.6;
+            b = b * 0.7;
+        }
+        let sum = r + g + b;
+        if sum > 2.0 {
+            r = r * 0.6;
+            g = g * 0.6;
+            b = b * 0.6;
+        }
+
+        if i % 2 == 0 {
+            return (g, b, r);
+        }
+
+        (r, g, b)
     }
 
     /// Add an axis-aligned box to the generated output.  The box will
@@ -319,7 +383,7 @@ impl PSTool {
     pub fn add_text_ln(&mut self, t: String) {
         // May want to add character escapes, and support multiple line strings
         // Here's how they do URL encoding. Looks like it examines one letter at
-        // a time, with characters encoded into u8. 
+        // a time, with characters encoded into u8.
         // https://docs.rs/urlencoding/2.1.3/src/urlencoding/enc.rs.html#72-74
         self.add_text(self.text_x, self.text_y, t);
         self.text_y = self.text_y - self.text_line_space;
@@ -350,12 +414,64 @@ impl PSTool {
         self.te.push(t);
     }
 
-    /// Adds a note to the PostScript output -- in contast to the 
+    /// Adds a note to the PostScript output -- in contast to the
     /// comment, a note is placed at the start of an output PostScript
     /// file.
     pub fn add_note(&mut self, s: String) {
         self.notes.push(s);
     }
+
+    /// Sets the line width
+    pub fn set_line_width(&mut self, line_width: f32) {
+        self.line_width = line_width * self.scale;
+        self.events.push(PSEvent {
+            tag: PSTag::W,
+            event: PSUnion {
+                line_width: self.line_width,
+            },
+        })
+    }
+
+    /// Adds a graphic context save point
+    pub fn add_gsave(&mut self) {
+        self.events.push(PSEvent {
+            tag: PSTag::GS,
+            event: PSUnion {
+                fill: Fill { fill: false },
+            },
+        })
+    }
+
+    /// Adds a graphic context save point
+    pub fn add_grestore(&mut self) {
+        self.events.push(PSEvent {
+            tag: PSTag::GR,
+            event: PSUnion {
+                fill: Fill { fill: false },
+            },
+        })
+    }
+
+    /// Adds a scaling effect
+    pub fn add_scale(&mut self, scale: f32) {
+        self.events.push(PSEvent {
+            tag: PSTag::S,
+            event: PSUnion {
+                scale: Scale { scale: scale },
+            },
+        })
+    }
+
+    /// Adds a translation event
+    pub fn add_translate(&mut self, dx: f32, dy: f32) {
+        self.events.push(PSEvent {
+            tag: PSTag::X,
+            event: PSUnion {
+                translate: Translate { dx: dx, dy: dy },
+            },
+        })
+    }
+
     /// Generates a very simple two-dimensional chart, using floating
     /// point numbers from the data vector.  The size of the chart is
     /// specified by the bounding coordinates.  The data in the input
@@ -430,12 +546,7 @@ impl PSTool {
         self.events.push(PSEvent {
             tag: PSTag::C,
             event: PSUnion {
-                color: Color {
-                    r,
-                    g,
-                    b,
-                    _a: a,
-                },
+                color: Color { r, g, b, _a: a },
             },
         });
     }
@@ -474,27 +585,18 @@ impl PSTool {
     /// reasonable.  Set the scale prior to adding elements; the scaling
     /// factor is applied to coordinates as these elements are added.
     pub fn set_scale(&mut self, scale: f32) {
-        self.scale = scale;
+        self.scale = self.scale * scale;
+        let new_font = self.font.clone();
+        let new_scale = self.font_scale;
+        self.set_font(new_scale, new_font);
     }
 
-    /// For stack-like scaling and location offsetting, a scale and offset
-    /// values can be pushed (and become active).  To return to the prior
-    /// scaling status, call the pop method.
-    pub fn push(&mut self, scale: f32, offset_x: f32, offset_y: f32) {
-        self.stack.push(PSStack{scale: self.scale, offset_x: self.offset_x, offset_y: self.offset_y});
+    pub fn translate(&mut self, offset_x: f32, offset_y: f32) {
         self.offset_x += self.scale * offset_x;
         self.offset_y += self.scale * offset_y;
-        self.scale = self.scale * scale;
     }
 
-    /// Restores the scaling and sizing status.
-    pub fn pop(&mut self) {
-        let coords = self.stack.pop().unwrap();
-
-        self.scale = coords.scale;
-        self.offset_x = coords.offset_x;
-        self.offset_y = coords.offset_y;
-    }
+    pub fn let_linewidth(&mut self, linewidth: f32) {}
 
     /// Gets current scaling information
     pub fn get_scale(&self) -> (f32, f32, f32) {
@@ -510,58 +612,71 @@ impl PSTool {
             tag: PSTag::FN,
             event: PSUnion {
                 font: Font {
-                    scale: scale,
+                    scale: scale * self.scale,
                     font_name: self.te.len(),
                 },
             },
         });
+        self.font = font.clone();
         self.te.push(font);
-        self.text_line_space = scale * 1.1;
+        self.font_scale = self.scale * scale;
+        self.text_line_space = self.font_scale * 1.1;
     }
 
     /// Returns the bounding box of elements that have been added.
     /// The bounding box does not track text entries -- only lines, and boxes.
     pub fn bbox(&self) -> (f32, f32, f32, f32) {
-        if self.bbox.valid {
-            return (self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury);
-        }
-        // BBox started?
-        let mut mark = false;
-        let mut llx = 0.0;
-        let mut lly = 0.0;
-        let mut urx = 0.0;
-        let mut ury = 0.0;
+        let mut bbox = bbox::BBox::new();
+        let mut scale = 1.0;
+        let mut offset_x = 0.0;
+        let mut offset_y = 0.0;
+
+        let mut stack = Vec::new();
 
         for e in &self.events {
             unsafe {
+                if e.tag == PSTag::GS {
+                    stack.push(PSStack {
+                        scale,
+                        offset_x,
+                        offset_y,
+                    });
+                }
+                if e.tag == PSTag::GR {
+                    let state = stack.pop().unwrap();
+                    scale = state.scale;
+                    offset_x = state.offset_x;
+                    offset_y = state.offset_y;
+                }
+                if e.tag == PSTag::S {
+                    scale = scale * e.event.scale.scale;
+                }
+                if e.tag == PSTag::X {
+                    offset_x = offset_x + scale * e.event.translate.dx;
+                    offset_y = offset_y + scale * e.event.translate.dy;
+                }
                 if e.tag == PSTag::C {}
                 if e.tag == PSTag::B || e.tag == PSTag::L || e.tag == PSTag::R {
-                    if !mark {
-                        llx = e.event.line.llx.min(e.event.line.urx);
-                        lly = e.event.line.lly.min(e.event.line.lly);
-                        urx = e.event.line.llx.max(e.event.line.urx);
-                        ury = e.event.line.lly.max(e.event.line.ury);
-                        mark = true;
-                    } else {
-                        llx = llx.min(e.event.line.llx);
-                        llx = llx.min(e.event.line.urx);
-                        lly = lly.min(e.event.line.lly);
-                        lly = lly.min(e.event.line.ury);
+                    let x = e.event.line.llx * scale + offset_x;
+                    let y = e.event.line.lly * scale + offset_y;
+                    bbox.addpoint(x, y);
 
-                        urx = urx.max(e.event.line.llx);
-                        urx = urx.max(e.event.line.urx);
-                        ury = ury.max(e.event.line.lly);
-                        ury = ury.max(e.event.line.ury);
-                    }
+                    let x = e.event.line.urx * scale + offset_x;
+                    let y = e.event.line.ury * scale + offset_y;
+                    bbox.addpoint(x, y);
                 }
             }
         }
 
+        if !bbox.valid {
+            return (0.0, 0.0, 0.0, 0.0);
+        }
+
         // Expand the bbox by the requested border size
-        llx = llx - self.border;
-        lly = lly - self.border;
-        urx = urx + self.border;
-        ury = ury + self.border;
+        let llx = bbox.llx - self.border;
+        let lly = bbox.lly - self.border;
+        let urx = bbox.urx + self.border;
+        let ury = bbox.ury + self.border;
 
         (llx, lly, urx, ury)
     }
@@ -659,7 +774,10 @@ impl PSTool {
         writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
         writeln!(&mut f, "%%Pages: 1").unwrap();
         writeln!(&mut f, "%%Page: 1 1").unwrap();
-        writeln!(&mut f, "%% gs -o filename.pdf -sDEVICE=pdfwrite -dEPSCrop filename.ps")?;
+        writeln!(
+            &mut f,
+            "%% gs -o filename.pdf -sDEVICE=pdfwrite -dEPSCrop filename.ps"
+        )?;
 
         // match filepath {
         //     Some(fp) => {let dr = fp.deref(); println!("Some {}");},
@@ -681,12 +799,22 @@ impl PSTool {
             "%% https://github.com/profmadden/pstools_r for more information."
         )?;
 
+        // Some definitions for boxes and lines, to make the files more compact
+        writeln!(&mut f, "/bs {{/h 2 1 roll def /w 2 1 roll def /oy 2 1 roll def /ox 2 1 roll def newpath ox oy moveto")?;
+        writeln!(&mut f, "ox w add oy lineto")?;
+        writeln!(&mut f, "ox w add oy h add lineto")?;
+        writeln!(&mut f, "ox oy h add lineto")?;
+        writeln!(&mut f, "closepath stroke}} def")?;
+
+        writeln!(&mut f, "/bf {{/h 2 1 roll def /w 2 1 roll def /oy 2 1 roll def /ox 2 1 roll def newpath ox oy moveto")?;
+        writeln!(&mut f, "ox w add oy lineto")?;
+        writeln!(&mut f, "ox w add oy h add lineto")?;
+        writeln!(&mut f, "ox oy h add lineto")?;
+        writeln!(&mut f, "closepath fill}} def")?;        
+
         writeln!(&mut f, "%% ").unwrap();
         for s in &self.notes {
-            writeln!(
-                &mut f,
-                "%% {}", s,
-            )?;
+            writeln!(&mut f, "%% {}", s,)?;
         }
         writeln!(&mut f, "/Courier findfont 15 scalefont setfont")?;
         let mut fillstate = false;
@@ -698,20 +826,29 @@ impl PSTool {
                     writeln!(&mut f, "{} {} {} setrgbcolor", c.r, c.g, c.b).unwrap();
                 }
                 if e.tag == PSTag::B {
-                    writeln!(
-                        &mut f,
-                        "newpath {} {} moveto",
-                        e.event.line.llx, e.event.line.lly
-                    )
-                    .unwrap();
-                    writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.ury).unwrap();
-                    writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
-                    writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.lly).unwrap();
-                    writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.lly).unwrap();
+                    // writeln!(
+                    //     &mut f,
+                    //     "newpath {} {} moveto",
+                    //     e.event.line.llx, e.event.line.lly
+                    // )
+                    // .unwrap();
+                    // writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.ury).unwrap();
+                    // writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
+                    // writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.lly).unwrap();
+                    // writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.lly).unwrap();
+                    // if fillstate {
+                    //     writeln!(&mut f, "closepath fill").unwrap();
+                    // } else {
+                    //     writeln!(&mut f, "stroke").unwrap();
+                    // }
                     if fillstate {
-                        writeln!(&mut f, "closepath fill").unwrap();
+                        writeln!(
+                            &mut f,
+                            "{} {} {} {} bf", e.event.line.llx, e.event.line.lly, e.event.line.urx, e.event.line.ury)?;
                     } else {
-                        writeln!(&mut f, "stroke").unwrap();
+                        writeln!(
+                            &mut f,
+                            "{} {} {} {} bs", e.event.line.llx, e.event.line.lly, e.event.line.urx, e.event.line.ury)?;
                     }
                 }
                 if e.tag == PSTag::L {
@@ -723,6 +860,9 @@ impl PSTool {
                     .unwrap();
                     writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
                     writeln!(&mut f, "stroke").unwrap();
+                }
+                if e.tag == PSTag::W {
+                    writeln!(&mut f, "{} setlinewidth", e.event.line_width).unwrap();
                 }
                 if e.tag == PSTag::R {
                     if fillstate {
@@ -761,7 +901,12 @@ impl PSTool {
                 }
                 if e.tag == PSTag::T {
                     if e.event.text.angle != 0.0 {
-                        writeln!(&mut f, "gsave {} {} translate {} rotate 0 0 moveto", e.event.text.x, e.event.text.y, e.event.text.angle).unwrap();
+                        writeln!(
+                            &mut f,
+                            "gsave {} {} translate {} rotate 0 0 moveto",
+                            e.event.text.x, e.event.text.y, e.event.text.angle
+                        )
+                        .unwrap();
                         writeln!(&mut f, "({}) show grestore", self.te[e.event.text.text]).unwrap();
                     } else {
                         writeln!(&mut f, "{} {} moveto", e.event.text.x, e.event.text.y).unwrap();
@@ -780,10 +925,27 @@ impl PSTool {
                     .unwrap();
                 }
                 if e.tag == PSTag::P {
+                    writeln!(&mut f, "{}", self.te[e.event.text.text])?;
+                }
+                if e.tag == PSTag::GS {
+                    writeln!(&mut f, "gsave")?;
+                }
+                if e.tag == PSTag::GR {
+                    writeln!(&mut f, "grestore")?;
+                }
+                if e.tag == PSTag::S {
                     writeln!(
                         &mut f,
-                        "{}",
-                        self.te[e.event.text.text])?;
+                        "{} {} scale",
+                        e.event.scale.scale, e.event.scale.scale
+                    )?;
+                }
+                if e.tag == PSTag::X {
+                    writeln!(
+                        &mut f,
+                        "{} {} translate",
+                        e.event.translate.dx, e.event.translate.dy
+                    )?;
                 }
             }
         }
@@ -865,8 +1027,6 @@ impl PSTool {
     pub fn demo(&mut self) {
         self.add_note("This is a note -- placed towards the start of the PS file.".to_string());
 
-
-
         self.set_fill(true);
         self.set_color(0.3, 0.4, 0.2, 1.0);
         self.add_box(5.0, 5.0, 20.0, 30.0);
@@ -874,7 +1034,9 @@ impl PSTool {
         self.add_box(35.0, 19.0, 7.0, 16.0);
         self.add_line(33.2, 44.1, 8.7, 5.5);
         self.add_comment("This text is inserted directly into the PS file".to_string());
-        self.add_comment("The location of this comment is after some earlier PS events".to_string());
+        self.add_comment(
+            "The location of this comment is after some earlier PS events".to_string(),
+        );
 
         self.set_color(0.1, 0.1, 0.8, 1.0);
         self.set_fill(false);
@@ -903,8 +1065,10 @@ impl PSTool {
         self.add_circle(120.0, 80.0, 30.0);
 
         self.set_color(1.0, 0.0, 0.0, 1.0);
-        
+
+        self.add_gsave();
         for i in 1..10 {
+            self.set_line_width(i as f32);
             self.set_color(0.6, i as f32 * 0.1, i as f32 * 0.1, 1.0);
             self.add_curve(
                 4.0,
@@ -915,6 +1079,7 @@ impl PSTool {
                 8.0 + (i * 11) as f32,
             );
         }
+        self.add_grestore();
 
         self.add_postscript("gsave 100 100 translate 20 rotate".to_string());
         self.set_fill(true);
@@ -946,7 +1111,6 @@ impl PSTool {
         self.add_text_rotated(15.0, 60.0, 90.0, "Rotated text".to_string());
 
         // self.set_bounds(-5.0, -10.0, 210.0, 208.0);
-
     }
 }
 
@@ -980,4 +1144,3 @@ fn getline(reader: &mut BufReader<File>) -> std::io::Result<String> {
 pub fn pstools_version() -> String {
     "PSTools version 0.1.0".to_string()
 }
-

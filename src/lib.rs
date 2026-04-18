@@ -649,10 +649,14 @@ impl PSTool {
                     });
                 }
                 if e.tag == PSTag::GR {
-                    let state = stack.pop().unwrap();
-                    scale = state.scale;
-                    offset_x = state.offset_x;
-                    offset_y = state.offset_y;
+                    if stack.len() > 0 {
+                        let state = stack.pop().unwrap();
+                        scale = state.scale;
+                        offset_x = state.offset_x;
+                        offset_y = state.offset_y;
+                    } else {
+                        println!("PSTools: Unmatched graphic restore");
+                    }
                 }
                 if e.tag == PSTag::S {
                     scale = scale * e.event.scale.scale;

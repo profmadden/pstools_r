@@ -53,11 +53,11 @@ fn main() {
         // number of operations, we have to track the actual XY locations of
         // objects, and these are controlled by the scaling and offset.
         // Maybe in the future, do this cleaner?
-        pst.add_gsave();
-        pst.translate(300.0, 300.0);
-        pst.set_scale(0.3);
-        pst.demo();
-        pst.add_grestore();
+        // pst.add_gsave();
+        // pst.translate(300.0, 300.0);
+        // pst.set_scale(0.3);
+        // pst.demo();
+        // pst.add_grestore();
         // pst.pop();
         // pst.push(0.3, 200.0, 0.0);
         // pst.demo();

@@ -429,7 +429,7 @@ impl PSTool {
         self.notes.push(s);
     }
 
-    /// Sets the line width
+    /// Adds a line width event, which is used when generating the PostScript output
     pub fn set_line_width(&mut self, line_width: f32) {
         self.line_width = line_width * self.scale;
         self.events.push(PSEvent {
@@ -440,7 +440,7 @@ impl PSTool {
         })
     }
 
-    /// Adds a graphic context save point
+    /// Adds a graphic context save event
     pub fn add_gsave(&mut self) {
         self.events.push(PSEvent {
             tag: PSTag::GS,
@@ -450,7 +450,7 @@ impl PSTool {
         })
     }
 
-    /// Adds a graphic context save point
+    /// Adds a graphic context restore event
     pub fn add_grestore(&mut self) {
         self.events.push(PSEvent {
             tag: PSTag::GR,
@@ -460,7 +460,7 @@ impl PSTool {
         })
     }
 
-    /// Adds a scaling effect
+    /// Adds a scaling effect event
     pub fn add_scale(&mut self, scale: f32) {
         self.events.push(PSEvent {
             tag: PSTag::S,
@@ -546,7 +546,7 @@ impl PSTool {
 
     /// Sets the color for object rendering, using Red/Green/Blue
     /// hues, where each of these values is in the range of 0.0-1.0.
-    /// The library currently also supports n alpha color channel,
+    /// The library currently also supports an alpha color channel,
     /// which is not supported by PostScript.  Future versions of this
     /// library may add support for PNG file generation (where alpha
     /// would be relevant).
@@ -579,7 +579,9 @@ impl PSTool {
         self.border = border;
     }
     /// The bounds for a figure can be set explicitly -- the fixed bounding
-    /// box can be used to trim a figure to only an area of interest.
+    /// box can be used to trim a figure to only an area of interest.  This is
+    /// used when outputting the PostScript to a file.  If no bounds are
+    /// set, the bounds are determined by the objects on the canvas.
     pub fn set_bounds(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
         self.bbox.valid = true;
         self.bbox.llx = llx;
@@ -588,18 +590,19 @@ impl PSTool {
         self.bbox.ury = ury;
     }
 
+    /// Deprecated, should remove.
     /// Lines generated are one point wide by default; the scale of all
     /// graphic elements can be adjusted if needed, so that the line widths appear
     /// reasonable.  Set the scale prior to adding elements; the scaling
     /// factor is applied to coordinates as these elements are added.
-    pub fn set_scale(&mut self, scale: f32) {
+    pub fn deprecated_set_scale(&mut self, scale: f32) {
         self.scale = self.scale * scale;
         let new_font = self.font.clone();
         let new_scale = self.font_scale;
         self.set_font(new_scale, new_font);
     }
 
-    pub fn translate(&mut self, offset_x: f32, offset_y: f32) {
+    pub fn deprecated_translate(&mut self, offset_x: f32, offset_y: f32) {
         self.offset_x += self.scale * offset_x;
         self.offset_y += self.scale * offset_y;
     }

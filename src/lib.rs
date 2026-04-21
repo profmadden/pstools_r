@@ -674,8 +674,8 @@ impl PSTool {
                     let y = e.event.line.lly * scale + offset_y;
                     bbox.addpoint(x, y);
 
-                    let x = e.event.line.urx * scale + offset_x;
-                    let y = e.event.line.ury * scale + offset_y;
+                    let x = (e.event.line.llx + e.event.line.urx) * scale + offset_x;
+                    let y = (e.event.line.lly + e.event.line.ury) * scale + offset_y;
                     bbox.addpoint(x, y);
                 }
             }

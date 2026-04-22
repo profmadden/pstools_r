@@ -265,7 +265,7 @@ impl PSTool {
     }
 
     /// Add a line between the indicated coordinates, using the current
-    /// selected color.
+    /// selected color.  Saved into the struct with delta offsets
     pub fn add_line(&mut self, llx: f32, lly: f32, urx: f32, ury: f32) {
         self.events.push(PSEvent {
             tag: PSTag::L,
@@ -276,7 +276,7 @@ impl PSTool {
                     // lly: lly * self.scale + self.offset_y,
                     // urx: urx * self.scale + self.offset_x,
                     // ury: ury * self.scale + self.offset_y,
-                    llx, lly, urx, ury,
+                    llx, lly, urx: urx - llx, ury: ury - lly,
                 },
             },
         });

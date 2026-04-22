@@ -674,8 +674,8 @@ impl PSTool {
                     let y = e.event.line.lly * scale + offset_y;
                     bbox.addpoint(x, y);
 
-                    let x = (e.event.line.llx + e.event.line.urx) * scale + offset_x;
-                    let y = (e.event.line.lly + e.event.line.ury) * scale + offset_y;
+                    let x = e.event.line.urx * scale + offset_x;
+                    let y = e.event.line.ury * scale + offset_y;
                     bbox.addpoint(x, y);
                 }
             }
@@ -879,7 +879,8 @@ impl PSTool {
                     // .unwrap();
                     // writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
                     // writeln!(&mut f, "stroke").unwrap();
-                    writeln!(&mut f, "{} {} {} {} ln", e.event.line.llx, e.event.line.lly, e.event.line.urx, e.event.line.ury)?;
+                    writeln!(&mut f, "{} {} {} {} ln", e.event.line.llx, e.event.line.lly,
+                    e.event.line.llx + e.event.line.urx, e.event.line.lly + e.event.line.ury)?;
                 }
                 if e.tag == PSTag::W {
                     writeln!(&mut f, "{} setlinewidth", e.event.line_width).unwrap();

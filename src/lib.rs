@@ -724,6 +724,17 @@ impl PSTool {
             }
         };
 
+        let scale;
+        let (llx, lly, urx, ury) = self.bbox();
+        let dx = urx - llx;
+        let dy = ury - lly;
+        let max_dim = dx.max(dy);
+        if max_dim > 10000.0 {
+            scale = 10000.0 / max_dim;
+        } else {
+            scale = 1.0;
+        }
+        
         // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
         let (origin_x, origin_y, urx, ury) = self.bbox();
         // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
@@ -735,7 +746,8 @@ impl PSTool {
             writeln!(
                 &mut f,
                 "%%BoundingBox: {} {} {} {}",
-                self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
+//                self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
+                llx * scale, lly * scale, urx * scale, ury * scale
             )?;
         } else {
             writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y)?;
@@ -795,16 +807,18 @@ impl PSTool {
                     if fillstate {
                         writeln!(
                             &mut f,
-                            "{} {} {} {} bf", e.event.line.llx, e.event.line.lly, e.event.line.urx - e.event.line.llx, e.event.line.ury - e.event.line.lly)?;
+                            "{} {} {} {} bf", scale * e.event.line.llx, scale * e.event.line.lly,
+                                                scale * (e.event.line.urx - e.event.line.llx), scale * (e.event.line.ury - e.event.line.lly))?;
                     } else {
                         writeln!(
                             &mut f,
-                            "{} {} {} {} bs", e.event.line.llx, e.event.line.lly, e.event.line.urx - e.event.line.llx, e.event.line.ury - e.event.line.lly)?;
+                            "{} {} {} {} bs", scale * e.event.line.llx, scale * e.event.line.lly,
+                            scale * (e.event.line.urx - e.event.line.llx), scale * (e.event.line.ury - e.event.line.lly))?;
                     }
                 }
                 if e.tag == PSTag::L {
-                    writeln!(&mut f, "{} {} {} {} ln", e.event.line.llx, e.event.line.lly,
-                        e.event.line.urx - e.event.line.llx, e.event.line.ury - e.event.line.lly)?;
+                    writeln!(&mut f, "{} {} {} {} ln", scale * e.event.line.llx, scale * e.event.line.lly,
+                        scale * (e.event.line.urx - e.event.line.llx), scale * (e.event.line.ury - e.event.line.lly))?;
                 }
                 if e.tag == PSTag::W {
                     writeln!(&mut f, "{} setlinewidth", e.event.line_width).unwrap();
@@ -814,13 +828,13 @@ impl PSTool {
                         writeln!(
                             &mut f,
                             "newpath {} {} {} 0 360 arc fill",
-                            e.event.line.llx, e.event.line.lly, e.event.line.urx
+                            scale * e.event.line.llx, scale * e.event.line.lly, scale * e.event.line.urx
                         )?;
                     } else {
                         writeln!(
                             &mut f,
                             "newpath {} {} {} 0 360 arc stroke",
-                            e.event.line.llx, e.event.line.lly, e.event.line.urx
+                            scale * e.event.line.llx, scale * e.event.line.lly, scale * e.event.line.urx
                         )?;
                     }
                 }
@@ -828,14 +842,14 @@ impl PSTool {
                     writeln!(
                         &mut f,
                         "newpath {} {} moveto {} {} {} {} {} {} curveto stroke",
-                        e.event.curve.x1,
-                        e.event.curve.y1,
-                        e.event.curve.x1,
-                        e.event.curve.y1,
-                        e.event.curve.x2,
-                        e.event.curve.y2,
-                        e.event.curve.x3,
-                        e.event.curve.y3
+                        scale * e.event.curve.x1,
+                        scale * e.event.curve.y1,
+                        scale * e.event.curve.x1,
+                        scale * e.event.curve.y1,
+                        scale * e.event.curve.x2,
+                        scale * e.event.curve.y2,
+                        scale * e.event.curve.x3,
+                        scale * e.event.curve.y3
                     )?;
                 }
                 if e.tag == PSTag::F {
@@ -846,7 +860,7 @@ impl PSTool {
                         writeln!(
                             &mut f,
                             "gsave {} {} translate {} rotate 0 0 moveto",
-                            e.event.text.x, e.event.text.y, e.event.text.angle
+                            scale * e.event.text.x, scale * e.event.text.y, e.event.text.angle
                         )
                         .unwrap();
                         writeln!(&mut f, "({}) show grestore", self.te[e.event.text.text]).unwrap();
@@ -886,7 +900,7 @@ impl PSTool {
                     writeln!(
                         &mut f,
                         "{} {} translate",
-                        e.event.translate.dx, e.event.translate.dy
+                        scale * e.event.translate.dx, scale * e.event.translate.dy
                     )?;
                 }
             }

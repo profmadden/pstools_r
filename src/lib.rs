@@ -258,7 +258,7 @@ impl PSTool {
                     // lly: lly * self.scale + self.offset_y,
                     // urx: urx * self.scale + self.offset_x,
                     // ury: ury * self.scale + self.offset_y,
-                    llx, lly, urx: urx - llx, ury: ury - lly,
+                    llx, lly, urx, ury
                 },
             },
         });
@@ -670,13 +670,15 @@ impl PSTool {
                 }
                 if e.tag == PSTag::C {}
                 if e.tag == PSTag::B || e.tag == PSTag::L || e.tag == PSTag::R {
-                    let x0 = e.event.line.llx * scale + offset_x;
-                    let y0 = e.event.line.lly * scale + offset_y;
-                    bbox.addpoint(x0, y0);
+                    // In the events, we have locations as lower left and
+                    // delta x, delta y
+                    let x = e.event.line.llx * scale + offset_x;
+                    let y = e.event.line.lly * scale + offset_y;
+                    bbox.addpoint(x, y);
 
                     let x = e.event.line.urx * scale + offset_x;
                     let y = e.event.line.ury * scale + offset_y;
-                    bbox.addpoint(x0 + x, y0 + y);
+                    bbox.addpoint( x,  y);
                 }
             }
         }
@@ -863,11 +865,11 @@ impl PSTool {
                     if fillstate {
                         writeln!(
                             &mut f,
-                            "{} {} {} {} bf", e.event.line.llx, e.event.line.lly, e.event.line.urx, e.event.line.ury)?;
+                            "{} {} {} {} bf", e.event.line.llx, e.event.line.lly, e.event.line.urx - e.event.line.llx, e.event.line.ury - e.event.line.lly)?;
                     } else {
                         writeln!(
                             &mut f,
-                            "{} {} {} {} bs", e.event.line.llx, e.event.line.lly, e.event.line.urx, e.event.line.ury)?;
+                            "{} {} {} {} bs", e.event.line.llx, e.event.line.lly, e.event.line.urx - e.event.line.llx, e.event.line.ury - e.event.line.lly)?;
                     }
                 }
                 if e.tag == PSTag::L {
@@ -880,7 +882,7 @@ impl PSTool {
                     // writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
                     // writeln!(&mut f, "stroke").unwrap();
                     writeln!(&mut f, "{} {} {} {} ln", e.event.line.llx, e.event.line.lly,
-                    e.event.line.llx + e.event.line.urx, e.event.line.lly + e.event.line.ury)?;
+                        e.event.line.urx - e.event.line.llx, e.event.line.ury - e.event.line.lly)?;
                 }
                 if e.tag == PSTag::W {
                     writeln!(&mut f, "{} setlinewidth", e.event.line_width).unwrap();

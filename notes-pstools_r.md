@@ -39,3 +39,17 @@ as well.
 Plus, set the line width, and a few other things.  But it's looking a lot
 more legit now.
 
+### 20260402
+
+A little bit of cleanup required.  In the events lists, coordinates
+should be stored as LLX LLY URX URY -- the actual coordinates.
+When scaling, and translating, the drawn coordinates are
+(X * SCALE + deltaX),(Y * SCALE + deltaY).
+
+Should use this when computing the bounding box of everything
+before generating.  With the PostScript functions defined for boxes
+and lines, the code assumes origin point and deltaX, deltaY, so
+need to do the subtraction.
+
+Mismatch of all of this stuff is resulting in bounding boxes being
+off, and not everything drawn correctly.  Time to get it sorted.

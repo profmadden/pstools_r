@@ -754,7 +754,7 @@ impl PSTool {
             writeln!(
                 &mut f,
                 "%%BoundingBox: {} {} {} {}",
-                origin_x, origin_y, urx, ury
+                origin_x * scale, origin_y * scale, urx * scale, ury * scale
             )?;
         }
         writeln!(&mut f, "%%LanguageLevel: 2")?;
@@ -794,7 +794,7 @@ impl PSTool {
         for s in &self.notes {
             writeln!(&mut f, "%% {}", s,)?;
         }
-        writeln!(&mut f, "/Courier findfont 12 scalefont setfont")?;
+        writeln!(&mut f, "/Courier findfont {} scalefont setfont", 12.0 * scale)?;
         let mut fillstate = false;
         for e in &self.events {
             // println!("Got event ");

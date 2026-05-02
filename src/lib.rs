@@ -670,13 +670,13 @@ impl PSTool {
                 }
                 if e.tag == PSTag::C {}
                 if e.tag == PSTag::B || e.tag == PSTag::L || e.tag == PSTag::R {
-                    let x = e.event.line.llx * scale + offset_x;
-                    let y = e.event.line.lly * scale + offset_y;
-                    bbox.addpoint(x, y);
+                    let x0 = e.event.line.llx * scale + offset_x;
+                    let y0 = e.event.line.lly * scale + offset_y;
+                    bbox.addpoint(x0, y0);
 
                     let x = e.event.line.urx * scale + offset_x;
                     let y = e.event.line.ury * scale + offset_y;
-                    bbox.addpoint(x, y);
+                    bbox.addpoint(x0 + x, y0 + y);
                 }
             }
         }

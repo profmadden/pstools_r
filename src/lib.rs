@@ -865,7 +865,7 @@ impl PSTool {
                         .unwrap();
                         writeln!(&mut f, "({}) show grestore", self.te[e.event.text.text]).unwrap();
                     } else {
-                        writeln!(&mut f, "{} {} moveto", e.event.text.x, e.event.text.y).unwrap();
+                        writeln!(&mut f, "{} {} moveto", scale * e.event.text.x, scale * e.event.text.y).unwrap();
                         writeln!(&mut f, "({}) show", self.te[e.event.text.text]).unwrap();
                     }
                 }
@@ -876,7 +876,7 @@ impl PSTool {
                     writeln!(
                         &mut f,
                         "/{} findfont {} scalefont setfont",
-                        self.te[e.event.font.font_name], e.event.font.scale
+                        self.te[e.event.font.font_name], e.event.font.scale * scale
                     )
                     .unwrap();
                 }

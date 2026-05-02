@@ -27,9 +27,15 @@ pub mod point;
 
 use bbox::BBox;
 use scan_fmt::scan_fmt;
+
+// use std::io::{BufRead, BufReader};
+// use std::io::{Error, ErrorKind};
+
 use std::fs::File;
 use std::io::Result;
 use std::io::Write;
+
+use lineio::LineIO;
 // use std::fs::Path;
 
 #[derive(Clone, Copy)]
@@ -702,68 +708,21 @@ impl PSTool {
         self.events.len()
     }
 
-    // Code here to try to figure out a good way to use the same
-    // interface as generic open/read/write...  I need to get smarter
-    // at Rust.
-    // pub fn gentest2<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
-    //     let mut f = File::open(path)?;
-
-    //     Ok(())
-    // }
-
-    // pub fn gentest(&self, filepath: Option<&Path>) -> std::io::Result<usize> {
-    //     let mut f;
-
-    //     // if the file path is empty, just print to standard out
-    //     if filepath.is_none() {
-    //         f = Box::new(std::io::stdout()) as Box<dyn Write>;
-    //     } else {
-    //         f = Box::new(File::create(filepath.unwrap()).unwrap()) as Box<dyn Write>;
-    //     }
-
-    //     // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
-    //     let (origin_x, origin_y, urx, ury) = self.bbox();
-    //     // println!("Bounding box {} {}  {} {}", origin_x, origin_y, urx, ury);
-
-    //     writeln!(&mut f, "%!PS-Adobe-3.0 EPSF-3.0")?;
-    //     writeln!(&mut f, "%%DocumentData: Clean7Bit").unwrap();
-    //     if self.bbox.valid {
-    //         writeln!(&mut f, "%%Origin: {} {}", self.bbox.llx, self.bbox.lly).unwrap();
-    //         writeln!(
-    //             &mut f,
-    //             "%%BoundingBox: {} {} {} {}",
-    //             self.bbox.llx, self.bbox.lly, self.bbox.urx, self.bbox.ury
-    //         )?;
-    //     } else {
-    //         writeln!(&mut f, "%%Origin: {} {}", origin_x, origin_y).unwrap();
-    //         writeln!(
-    //             &mut f,
-    //             "%%BoundingBox: {} {} {} {}",
-    //             origin_x, origin_y, urx, ury
-    //         )?;
-    //     }
-    //     writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
-    //     writeln!(&mut f, "%%Pages: 1").unwrap();
-    //     writeln!(&mut f, "%%Page: 1 1").unwrap();
-    //     if filepath.is_some() {
-    //         let fp = filepath.unwrap();
-    //         let fppdf = filepath.unwrap().with_extension("pdf");
-    //         writeln!(&mut f, "%% gs -o {} -sDEVICE=pdfwrite -dEPSCrop {}", fp.display(), fppdf.display())?;
-    //     }
-
-    //     Ok(0)
-
-    // }
-    /// Generates simple PostScript to express the objects that have
-    /// been added.  The filepath should be the name of a file to store
-    /// the PostScript in.  If this string is zero length, output will
-    /// be sent to standard out.
-    // pub fn generate<P: AsRef<Path>>(&self, filepath: Option<P>) -> Result<usize> {
+    /// generates the PostScript output from the stored events.
+    /// Returns the number of events processed (zero would indicate
+    /// some sort of error).
     pub fn generate(&self, filepath: String) -> Result<usize> {
-        let mut f;
+        // let mut f;
 
         // if the file path is empty, just print to standard out
-        f = Box::new(File::create(filepath).unwrap()) as Box<dyn Write>;
+        // f = Box::new(File::create(filepath).unwrap()) as Box<dyn Write>;
+        let mut f = match File::create(filepath) {
+            Ok(file) => file,
+            Err(err) => {
+                println!("File open error {}", err);
+                return Ok(0);
+            }
+        };
 
         // let mut f = unsafe { std::os::unix::io::from_raw_fd(3); }
         let (origin_x, origin_y, urx, ury) = self.bbox();
@@ -786,28 +745,14 @@ impl PSTool {
                 origin_x, origin_y, urx, ury
             )?;
         }
-        writeln!(&mut f, "%%LanguageLevel: 2").unwrap();
-        writeln!(&mut f, "%%Pages: 1").unwrap();
-        writeln!(&mut f, "%%Page: 1 1").unwrap();
+        writeln!(&mut f, "%%LanguageLevel: 2")?;
+        writeln!(&mut f, "%%Pages: 1")?;
+        writeln!(&mut f, "%%Page: 1 1")?;
         writeln!(
             &mut f,
             "%% gs -o filename.pdf -sDEVICE=pdfwrite -dEPSCrop filename.ps"
         )?;
 
-        // match filepath {
-        //     Some(fp) => {let dr = fp.deref(); println!("Some {}");},
-        //     None => println!("None"),
-        // }
-
-        // if filepath.is_some() {
-        //     let fp: AsRef<Path> = &filepath.unwrap();
-        //     writeln!(
-        //         &mut f,
-        //         "%% gs -o {}.pdf -sDEVICE=pdfwrite -dEPSCrop {}",
-        //         fp.display(), filepath.unwrap().display()
-        //     )
-        //     .unwrap();
-        // }
         writeln!(&mut f, "%% Binghamton PSTools PostScript Generator")?;
         writeln!(
             &mut f,
@@ -837,7 +782,7 @@ impl PSTool {
         for s in &self.notes {
             writeln!(&mut f, "%% {}", s,)?;
         }
-        writeln!(&mut f, "/Courier findfont 15 scalefont setfont")?;
+        writeln!(&mut f, "/Courier findfont 12 scalefont setfont")?;
         let mut fillstate = false;
         for e in &self.events {
             // println!("Got event ");
@@ -847,21 +792,6 @@ impl PSTool {
                     writeln!(&mut f, "{} {} {} setrgbcolor", c.r, c.g, c.b).unwrap();
                 }
                 if e.tag == PSTag::B {
-                    // writeln!(
-                    //     &mut f,
-                    //     "newpath {} {} moveto",
-                    //     e.event.line.llx, e.event.line.lly
-                    // )
-                    // .unwrap();
-                    // writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.ury).unwrap();
-                    // writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
-                    // writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.lly).unwrap();
-                    // writeln!(&mut f, "{} {} lineto", e.event.line.llx, e.event.line.lly).unwrap();
-                    // if fillstate {
-                    //     writeln!(&mut f, "closepath fill").unwrap();
-                    // } else {
-                    //     writeln!(&mut f, "stroke").unwrap();
-                    // }
                     if fillstate {
                         writeln!(
                             &mut f,
@@ -873,14 +803,6 @@ impl PSTool {
                     }
                 }
                 if e.tag == PSTag::L {
-                    // writeln!(
-                    //     &mut f,
-                    //     "newpath {} {} moveto",
-                    //     e.event.line.llx, e.event.line.lly
-                    // )
-                    // .unwrap();
-                    // writeln!(&mut f, "{} {} lineto", e.event.line.urx, e.event.line.ury).unwrap();
-                    // writeln!(&mut f, "stroke").unwrap();
                     writeln!(&mut f, "{} {} {} {} ln", e.event.line.llx, e.event.line.lly,
                         e.event.line.urx - e.event.line.llx, e.event.line.ury - e.event.line.lly)?;
                 }
@@ -893,15 +815,13 @@ impl PSTool {
                             &mut f,
                             "newpath {} {} {} 0 360 arc fill",
                             e.event.line.llx, e.event.line.lly, e.event.line.urx
-                        )
-                        .unwrap();
+                        )?;
                     } else {
                         writeln!(
                             &mut f,
                             "newpath {} {} {} 0 360 arc stroke",
                             e.event.line.llx, e.event.line.lly, e.event.line.urx
-                        )
-                        .unwrap();
+                        )?;
                     }
                 }
                 if e.tag == PSTag::V {
@@ -916,8 +836,7 @@ impl PSTool {
                         e.event.curve.y2,
                         e.event.curve.x3,
                         e.event.curve.y3
-                    )
-                    .unwrap();
+                    )?;
                 }
                 if e.tag == PSTag::F {
                     fillstate = e.event.fill.fill;
@@ -981,13 +900,17 @@ impl PSTool {
     /// per line.  Blank lines, and lines starting with a hash mark are ignored.  I need to figure
     /// out the proper Rust way to read from either a file or standard input.
     pub fn parse(&mut self, filename: String) -> Result<usize> {
-        let mut reader;
+        // let mut reader;
 
-        let f = File::open(filename).unwrap();
-        reader = BufReader::with_capacity(32000, f);
+        // let f = File::open(filename).unwrap();
+        // reader = BufReader::with_capacity(32000, f);
+        let mut lineio = match LineIO::new(&filename) {
+            Ok(reader) => reader,
+            Err(error) => {panic!("File opening error: {error:?}");}
+        };
 
         loop {
-            let line = getline(&mut reader);
+            let line = lineio.getline();
             match line {
                 Ok(s) => {
                     // println!("Input line {s}");
@@ -1141,31 +1064,6 @@ impl PSTool {
     }
 }
 
-use std::io::{BufRead, BufReader};
-use std::io::{Error, ErrorKind};
-
-fn getline(reader: &mut BufReader<File>) -> std::io::Result<String> {
-    loop {
-        let mut line = String::new();
-        let _len = reader.read_line(&mut line).unwrap();
-        // println!("Read in {} bytes, line {}", _len, line);
-
-        if _len == 0 {
-            return std::result::Result::Err(Error::new(ErrorKind::Other, "end of file"));
-        }
-
-        if line.starts_with("#") {
-            // println!("Skip comment.");
-            continue;
-        }
-
-        if _len == 1 {
-            continue;
-        }
-
-        return Ok(line.trim().to_string());
-    }
-}
 
 /// Returns information string for the installed version.
 pub fn pstools_version() -> String {

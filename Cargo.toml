@@ -9,4 +9,5 @@ exclude = ["notes-pstools_r.md"]
 
 [dependencies]
 argh = "0.1.13"
+lineio = "0.1.2"
 scan_fmt = "0.2.6"
